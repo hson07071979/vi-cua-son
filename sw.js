@@ -1,4 +1,4 @@
-const C='vcs-v1';
+const C='vcs-v2';
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html','manifest.webmanifest','icon-180.png','icon-192.png'])))});
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 // Mạng trước (để luôn có bản mới), mất mạng thì dùng bản đã lưu

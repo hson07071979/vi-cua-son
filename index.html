@@ -147,47 +147,49 @@ td.r,th.r{text-align:right}
 a{color:var(--accent)}
 ul.clean{margin:0;padding-left:18px;display:grid;gap:6px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.rec{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.rec:first-of-type{border-top:0}
+.kpill{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;display:inline-block;margin-top:2px}
+.k-in{background:var(--good-bg);color:var(--good)}.k-fixed{background:var(--accent-bg);color:var(--accent)}
+.k-lev,.k-momo{background:var(--momo-bg);color:var(--momo)}.k-jar{background:var(--jar-bg);color:var(--jar)}
+.tx{cursor:pointer}
+.tx:hover{background:var(--bg)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:14px;padding:4px;gap:4px}
+.seg button{border:0;border-radius:10px;padding:10px;font-weight:700;background:transparent;color:var(--muted)}
+.seg button[aria-pressed="true"].out{background:var(--momo);color:#fff}
+.seg button[aria-pressed="true"].in{background:var(--good);color:#fff}
+.empty{border:2px dashed var(--line);border-radius:18px;padding:22px;text-align:center;display:grid;gap:10px;justify-items:center}
 </style>
 
 <div class="wrap">
   <header class="top">
-    <div class="brand"><h1>Ví Của Sơn</h1><span id="syncState">Đang tải…</span></div>
+    <div class="brand"><h1 id="appName">Ví Của Sơn</h1><span id="syncState">Đang tải…</span></div>
     <div class="monthnav">
       <button id="prevM" aria-label="Tháng trước">‹</button>
-      <b id="mLabel">Tháng 10/2026</b>
+      <b id="mLabel">Tháng</b>
       <button id="nextM" aria-label="Tháng sau">›</button>
     </div>
   </header>
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" data-tab="home" aria-selected="true">Tổng quan</button>
     <button class="tab" role="tab" data-tab="tx" aria-selected="false">Giao dịch</button>
-    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Kế hoạch & MoMo</button>
+    <button class="tab" role="tab" data-tab="fixed" aria-selected="false">Thu chi cố định</button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Ngân sách</button>
     <button class="tab" role="tab" data-tab="jar" aria-selected="false">Hũ để dành</button>
   </nav>
   <main id="view"></main>
 </div>
-<button class="fab" id="fab">+ Ghi chi tiêu</button>
+<button class="fab" id="fab">+ Ghi thu chi</button>
 <div id="sheetHost"></div>
 <div id="toastHost"></div>
 
 <script>
 (()=>{
-const START='2026-10';
-const CATS=[
- {id:'gai',name:'Gái & quà cáp',v:'--c-gai',b:4000000,ab:'G'},
- {id:'an',name:'Ăn uống',v:'--c-an',b:2000000,ab:'Ă'},
- {id:'xang',name:'Xăng xe',v:'--c-xang',b:500000,ab:'X'},
- {id:'banbe',name:'Bạn bè',v:'--c-banbe',b:700000,ab:'B'},
- {id:'dam',name:'Đám tiệc',v:'--c-dam',b:500000,ab:'Đ'},
- {id:'khac',name:'Chi phí khác',v:'--c-khac',b:367000,ab:'K'},
-];
-const PLAN_SPEND=8067000, MOMO_CAP=3000000;
-const JARS=[
- {id:'khancap',name:'Quỹ khẩn cấp',goal:6000000,why:'Đủ 3tr là có thể tự “gối đầu” bằng tiền mình, bỏ luôn MoMo và phí 33k/tháng.'},
- {id:'mang',name:'Tiền mạng 2027',goal:3000000,why:'250k/tháng × 12 tháng = đủ đóng mạng năm sau, khỏi phải mượn MoMo nữa.'},
-];
+const PERSONAL=false;
+// ---------- helpers ----------
 const $=s=>document.querySelector(s);
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const vnd=n=>Math.round(n).toLocaleString('vi-VN')+'đ';
 const tr=n=>{const a=Math.abs(n),s=n<0?'−':'';if(a>=1e6)return s+(+(a/1e6).toFixed(3)).toLocaleString('vi-VN')+'tr';return s+Math.round(a/1000).toLocaleString('vi-VN')+'k'};
 const pad=n=>String(n).padStart(2,'0');
@@ -196,189 +198,221 @@ const todayStr=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.ge
 const todayKey=todayStr.slice(0,7);
 const addM=(k,d)=>{let[y,m]=k.split('-').map(Number);m+=d;while(m>12){m-=12;y++}while(m<1){m+=12;y--}return `${y}-${pad(m)}`};
 const dim=k=>{const[y,m]=k.split('-').map(Number);return new Date(y,m,0).getDate()};
-const cssv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function parseAmt(v){let n=+String(v).replace(/[^\d]/g,'');if(n>0&&n<1000)n*=1000;return n}
+const mName=k=>`tháng ${+k.slice(5)}`;
 
-let S={budgets:Object.fromEntries(CATS.map(c=>[c.id,c.b])),months:{},jarlog:[]};
-let viewKey=todayKey<START?START:todayKey, tab='home', db=null;
-try{const h=location.hash.slice(1);if(['home','tx','plan','jar'].includes(h))tab=h}catch(e){}
+// ---------- danh mục ----------
+const CATS=[
+ {id:'gai',name:'Hẹn hò & quà cáp',v:'--c-gai',ab:'G'},
+ {id:'an',name:'Ăn uống',v:'--c-an',ab:'Ă'},
+ {id:'xang',name:'Xăng xe',v:'--c-xang',ab:'X'},
+ {id:'banbe',name:'Bạn bè',v:'--c-banbe',ab:'B'},
+ {id:'dam',name:'Đám tiệc',v:'--c-dam',ab:'Đ'},
+ {id:'khac',name:'Chi phí khác',v:'--c-khac',ab:'K'},
+];
+const INCATS=[
+ {id:'thuong',name:'Thưởng / lương thêm',ab:'T'},{id:'hoahong',name:'Hoa hồng',ab:'H'},
+ {id:'duoccho',name:'Được cho / tặng',ab:'C'},{id:'ban',name:'Bán đồ',ab:'B'},{id:'thukhac',name:'Thu khác',ab:'+'},
+];
+const KINDS={in:'Thu vào',fixed:'Chi cố định',lev:'Trả bằng Ví Trả Sau',momo:'Trả hoá đơn ví',jar:'Bỏ hũ'};
+const KORDER={in:0,lev:1,fixed:2,momo:3,jar:4};
 
-// ---------- storage ----------
-const LS='vi-cua-son-v1';
-function lsLoad(){try{const r=JSON.parse(localStorage.getItem(LS)||'null');if(r){S.months=r.months||{};S.jarlog=r.jarlog||[];if(r.budgets)S.budgets={...S.budgets,...r.budgets}}}catch(e){}}
+// ---------- dữ liệu mặc định ----------
+function defaults(){
+  
+  return{
+    cfg:{start:todayKey,openDebt:0,fee:0,due:15,cap:0,jars:[
+      {id:'khancap',name:'Quỹ khẩn cấp',goal:0,why:''},{id:'muctieu',name:'Hũ mục tiêu',goal:0,why:''}]},
+    budgets:{gai:0,an:0,xang:0,banbe:0,dam:0,khac:0},rec:[]};
+}
+const D0=defaults();
+let S={cfg:D0.cfg,budgets:D0.budgets,rec:D0.rec,months:{},jarlog:[]};
+let viewKey=todayKey, tab='home', db=null, hasSettings=false;
+try{const h=location.hash.slice(1);if(['home','tx','fixed','plan','jar'].includes(h))tab=h}catch(e){}
+const st=()=>S.cfg.start;
+const JARS=()=>S.cfg.jars||[];
+
+// ---------- lưu trữ ----------
+const LS=PERSONAL?'vi-cua-son-v1':'vi-dong-tien-v1';
+function applySettings(d){if(!d)return;if(d.budgets)S.budgets={...S.budgets,...d.budgets};if(Array.isArray(d.rec))S.rec=d.rec.map(r=>({...r}));if(d.cfg)S.cfg={...S.cfg,...d.cfg};hasSettings=true}
+function lsLoad(){try{const r=JSON.parse(localStorage.getItem(LS)||'null');if(r){S.months=r.months||{};S.jarlog=r.jarlog||[];if(r.rec||r.cfg)applySettings(r);else if(r.budgets)S.budgets={...S.budgets,...r.budgets}}}catch(e){}}
 function lsSave(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 const chains={};
 function persist(path,data){
-  lsSave();
-  if(!db)return;
-  chains[path]=(chains[path]||Promise.resolve()).then(()=>db.doc(path).set(data)).catch(e=>{toast('Chưa lưu lên máy chủ được, dữ liệu vẫn nằm trên máy này.')});
+  lsSave();if(!db)return;
+  chains[path]=(chains[path]||Promise.resolve()).then(()=>db.doc(path).set(data)).catch(()=>{toast('Chưa lưu lên máy chủ được, dữ liệu vẫn nằm trên máy này.')});
 }
 function month(k){const m=S.months[k];return m?{tx:[...(m.tx||[])],checks:{...(m.checks||{})},amts:{...(m.amts||{})},auto:{...(m.auto||{})}}:{tx:[],checks:{},amts:{},auto:{}}}
-const ia=(i,m)=>(m.amts&&m.amts[i.id]!=null)?m.amts[i.id]:i.amt;
 function saveMonth(k,m){S.months[k]=m;MEMO={};persist('months/'+k,m)}
 function saveJars(){persist('app/jars',{log:S.jarlog})}
-function saveBudgets(){persist('app/settings',{budgets:S.budgets})}
+function saveSettings(){MEMO={};hasSettings=true;persist('app/settings',{budgets:S.budgets,rec:S.rec,cfg:S.cfg})}
 
-// ---------- plan ----------
-function plan(k){
-  const oct=k===START;
-  const d1=[{id:'d1-in',kind:'in',label:'Nhận lương đợt 1',amt:8000000},
-    {id:'d1-dien',kind:'lev',label:'Trả tiền điện bằng Ví Trả Sau (cộng vào nợ ví)',amt:3000000},
-    {id:'d1-nuoc',kind:'fixed',label:'Trả tiền nước',amt:400000}];
-  const mo=m=>`tháng ${+addM(k,-1).slice(5)}`;
-  const B=bill(k), mk=month(k), d1pay=Math.min(1500000,B);
-  const d1paid=(mk.amts&&mk.amts['d1-momo']!=null)?mk.amts['d1-momo']:d1pay;
-  d1.push({id:'d1-momo',kind:'momo',label:`Trả ví (hoá đơn ${mo()}, hạn 15/${+k.slice(5)})`,amt:d1pay},
-    {id:'d1-j1',kind:'jar',jar:'khancap',label:'Bỏ hũ Quỹ khẩn cấp',amt:625000},
-    {id:'d1-j2',kind:'jar',jar:'mang',label:'Bỏ hũ Tiền mạng 2027',amt:125000});
-  const d15=[{id:'d15-in',kind:'in',label:'Nhận lương đợt 2',amt:5000000},
-    {id:'d15-momo',kind:'momo',label:`Trả nốt hoá đơn ${mo()}. HẠN CHÓT HÔM NAY, trả ngay khi lương về`,amt:Math.max(0,B-d1paid),hot:true},
-    {id:'d15-j1',kind:'jar',jar:'khancap',label:'Bỏ hũ Quỹ khẩn cấp',amt:oct?570000:625000},
-    {id:'d15-j2',kind:'jar',jar:'mang',label:'Bỏ hũ Tiền mạng 2027',amt:125000}];
-  const cap=[0,0];
-  const out=a=>a.filter(i=>i.kind!=='in'&&i.kind!=='lev').reduce((s,i)=>s+i.amt,0);
-  const baseB=CATS.reduce((a,c)=>a+(S.budgets[c.id]||0),0);
-  // Điều chỉnh ngân sách: chỉ khi tiền điện tháng trước (trả bằng ví) hoặc tiền nước khác kế hoạch.
-  // Khoản quẹt MoMo thêm KHÔNG trừ lại ở đây vì đã tính là chi tiêu ở tháng quẹt (tiền thịt dư ra tháng đó sẽ chuyển sang để trả).
-  const water=ia(d1[2],mk);let adj=400000-water;
-  if(!oct){const pk=addM(k,-1),u=projUse(pk),tx=month(pk).tx.filter(t=>t.src==='momo').reduce((s,t)=>s+t.amt,0);adj+=3033000-((u-tx)+(u>0?FEE:0))}
-  const sumB=baseB+adj;
-  const k1=Math.round(baseB*3817/8067/1000)*1000+Math.min(0,adj), k2=sumB-k1;
-  const outA=a=>a.filter(i=>i.kind!=='in'&&i.kind!=='lev').reduce((s,i)=>s+ia(i,mk),0);
-  const keep=8000000-outA(d1)-k1; // tiền thịt giữ lại từ lương đợt 1 cho kỳ 15
-  return {oct,d1,d15,cap,spend:[k1,k2],keep,sumB,baseB,adj,bill:B};
-}
-function monthStats(k){
-  const m=month(k),p=plan(k);
-  const spent=m.tx.reduce((s,t)=>s+t.amt,0);
-  const byCat={};CATS.forEach(c=>byCat[c.id]=0);m.tx.forEach(t=>byCat[t.cat]=(byCat[t.cat]||0)+t.amt);
-  const k1=m.tx.filter(t=>+t.d.slice(8)<15).reduce((s,t)=>s+t.amt,0);
-  const momoTx=m.tx.filter(t=>t.src==='momo').reduce((s,t)=>s+t.amt,0);
-  const items=[...p.d1,...p.d15],done=items.filter(i=>m.checks[i.id]);
-  const sum=kind=>done.filter(i=>i.kind===kind).reduce((s,i)=>s+ia(i,m),0);
-  const momoPaidAll=sum('momo'),momoPaid=momoPaidAll;
-  const lev=sum('lev'),momoUse=momoTx+lev;
-  const inc=sum('in'),fixed=sum('fixed'),jar=sum('jar'),cashSpent=spent-momoTx;
-  return {m,p,spent,byCat,k1,k2:spent-k1,momoUse,momoTx,lev,momoPaid,momoPaidAll,momoDue:p.bill,inc,fixed,jar,cashSpent,flow:inc-fixed-momoPaidAll-jar-cashSpent};
-}
-const FEE=33000, SEP_BILL=3088000; // hoá đơn T9 trên app: 3.088.000đ, hạn 15/10
-// Hoá đơn tháng k = mọi khoản dùng ví trong tháng k-1 + phí 33k (nếu tháng đó có dùng ví) + phần hoá đơn cũ chưa trả (trễ)
+// ---------- sổ cái ----------
+const ia=(i,m)=>(m.amts&&m.amts[i.id]!=null)?m.amts[i.id]:i.amt;
+const active=(r,k)=>(!r.from||r.from<=k)&&(!r.until||k<=r.until);
+const recOf=k=>S.rec.filter(r=>active(r,k));
+const outTx=m=>m.tx.filter(t=>t.type!=='in');
+const inTx=m=>m.tx.filter(t=>t.type==='in');
+const sumAmt=a=>a.reduce((s,t)=>s+t.amt,0);
 let MEMO={};const memo=(n,f)=>k=>{const key=n+k;if(!(key in MEMO))MEMO[key]=f(k);return MEMO[key]};
-const dienAmt=m=>m.amts['d1-dien']!=null?m.amts['d1-dien']:3000000;
-// dùng ví thực tế (chỉ tính tiền điện khi đã tick)
-const usedIn=memo('u',k=>{const m=month(k);return (m.checks['d1-dien']?dienAmt(m):0)+m.tx.filter(t=>t.src==='momo').reduce((s,t)=>s+t.amt,0)});
-// dùng ví dự kiến để báo trước hoá đơn: chưa tick tiền điện thì vẫn tính 3tr vì tháng nào cũng trả điện bằng ví
-const projUse=memo('pu',k=>{const m=month(k);return usedIn(k)+(!m.checks['d1-dien']&&k>=todayKey?dienAmt(m):0)});
-const feeOf=k=>usedIn(k)>0?FEE:0;
-const d1Pay=k=>{const m=month(k);return m.amts['d1-momo']!=null?m.amts['d1-momo']:Math.min(1500000,bill(k))};
-const paidIn=memo('p',k=>{const m=month(k);let t=0;if(m.checks['d1-momo'])t+=d1Pay(k);
-  if(m.checks['d15-momo'])t+=m.amts['d15-momo']!=null?m.amts['d15-momo']:Math.max(0,bill(k)-d1Pay(k));return t});
-// hoá đơn trả trong tháng k = dùng ví tháng k-1 + phí 33k + phần hoá đơn cũ còn thiếu sau hạn
-const bill=memo('b',k=>{if(k<=START)return SEP_BILL;const pk=addM(k,-1);const u=projUse(pk);return Math.max(0,u+(u>0?FEE:0)+carryOf(pk))});
-// phần hoá đơn tháng k còn lại: thiếu (chỉ tính sau hạn 15) hoặc trả dư (trừ vào hoá đơn sau)
-function carryOf(k){const c=bill(k)-paidIn(k);return c<0?c:(todayStr>`${k}-15`?c:0)}
-function lateOf(k){return Math.max(0,carryOf(k))}
-const debtOpen=memo('o',k=>{if(k<=START)return SEP_BILL;const pk=addM(k,-1);return debtOpen(pk)+usedIn(pk)-paidIn(pk)+feeOf(pk)});
-function momoDebt(k){return debtOpen(k)+usedIn(k)-paidIn(k)}
-function cashOf(k){ // tiền thịt: bắt đầu 0 từ tháng 10, dư tháng trước chuyển sang
-  let bal=0,key=START,open=0;
-  while(key<=k){open=bal;bal+=monthStats(key).flow;key=addM(key,1)}
-  return {open,bal};
-}
-function jarBalance(id){
-  let b=0;
-  Object.entries(S.months).forEach(([k,m])=>{const p=plan(k);[...p.d1,...p.d15].forEach(i=>{if(i.kind==='jar'&&i.jar===id&&m.checks&&m.checks[i.id])b+=ia(i,m)})});
-  S.jarlog.forEach(l=>{if(l.jar===id)b+=l.amt});
-  return b;
-}
-function tone(p){return p>1?'bad':p>=.8?'warn':'good'}
+const momoTxOf=memo('mt',k=>sumAmt(outTx(month(k)).filter(t=>t.src==='momo')));
+// Dùng ví thực tế: khoản cố định trả bằng ví đã tick + quẹt MoMo
+const usedIn=memo('u',k=>{const m=month(k);return recOf(k).filter(r=>r.kind==='lev'&&m.checks[r.id]).reduce((s,r)=>s+ia(r,m),0)+momoTxOf(k)});
+// Dùng ví dự kiến (tháng này/tương lai chưa tick vẫn tính) để báo trước hoá đơn
+const projUse=memo('pu',k=>{const m=month(k);return usedIn(k)+(k>=todayKey?recOf(k).filter(r=>r.kind==='lev'&&!m.checks[r.id]).reduce((s,r)=>s+ia(r,m),0):0)});
+const feeOf=k=>usedIn(k)>0?S.cfg.fee:0;
+const dueStr=k=>`${k}-${pad(Math.min(S.cfg.due,dim(k)))}`;
+// Hoá đơn trả trong tháng k = dùng ví tháng trước + phí + phần hoá đơn cũ còn thiếu (sau hạn) hoặc trả dư
+const bill=memo('b',k=>{if(k<=st())return S.cfg.openDebt;const pk=addM(k,-1),u=projUse(pk);return Math.max(0,u+(u>0?S.cfg.fee:0)+carryOf(pk))});
+function carryOf(k){const c=bill(k)-paidIn(k);return c<0?c:(todayStr>dueStr(k)?c:0)}
+const lateOf=k=>Math.max(0,carryOf(k));
+const paidIn=memo('p',k=>{const m=month(k);return plan(k).items.filter(i=>i.kind==='momo'&&m.checks[i.id]).reduce((s,i)=>s+ia(i,m),0)});
+const debtOpen=memo('o',k=>{if(k<=st())return S.cfg.openDebt;const pk=addM(k,-1);return debtOpen(pk)+usedIn(pk)-paidIn(pk)+feeOf(pk)});
+const momoDebt=k=>debtOpen(k)+usedIn(k)-paidIn(k);
 
-// ---------- views ----------
+const plan=memo('pl',k=>{
+  const m=month(k),D=dim(k),pk=addM(k,-1);
+  const items=recOf(k).map(r=>({...r})).sort((a,b)=>(a.day-b.day)||(KORDER[a.kind]-KORDER[b.kind]));
+  items.forEach(i=>{i.day=Math.min(Math.max(1,+i.day||1),D);
+    });
+  const B=bill(k);let rem=B;
+  items.filter(i=>i.kind==='momo').forEach(i=>{
+    i.amt=i.mode==='rest'?Math.max(0,rem):Math.min(i.amt,Math.max(0,rem));rem-=ia(i,m);
+    i.sub=`Hoá đơn ${mName(pk)}, hạn ${Math.min(S.cfg.due,D)}/${+k.slice(5)}`;if(i.mode==='rest')i.hot=true;});
+  const sum=f=>items.filter(f).reduce((s,i)=>s+ia(i,m),0);
+  const inP=sum(i=>i.kind==='in'),fixP=sum(i=>i.kind==='fixed'),jarP=sum(i=>i.kind==='jar');
+  // phần hoá đơn ví tính vào tháng này: bỏ phần quẹt MoMo (đã tính là chi tiêu tháng trước) và phần trễ (tiền đó vẫn nằm trong tiền thịt)
+  let billB;
+  if(k<=st())billB=B;else{const u=projUse(pk);billB=u-momoTxOf(pk)+(u>0?S.cfg.fee:0)+Math.min(0,carryOf(pk))}
+  const ins=inTx(m),extraIn=sumAmt(ins),extraIn1=sumAmt(ins.filter(t=>+t.d.slice(8)<15));
+  const base=inP-fixP-jarP-billB, spend=base+extraIn;
+  const k1b=Math.round(base*14/D/1000)*1000+extraIn1;
+  const keep=sum(i=>i.day<15&&i.kind==='in')-sum(i=>i.day<15&&(i.kind==='fixed'||i.kind==='jar'||i.kind==='momo'))-(k1b-extraIn1);
+  return {items,B,spend,base,extraIn,k1b,keep,billB,inP,fixP,jarP};
+});
+function monthStats(k){
+  const m=month(k),p=plan(k),outs=outTx(m),ins=inTx(m);
+  const spent=sumAmt(outs);
+  const byCat={};CATS.forEach(c=>byCat[c.id]=0);outs.forEach(t=>byCat[t.cat]=(byCat[t.cat]||0)+t.amt);
+  const k1=sumAmt(outs.filter(t=>+t.d.slice(8)<15));
+  const momoTx=momoTxOf(k),extraIn=sumAmt(ins);
+  const done=p.items.filter(i=>m.checks[i.id]);
+  const sum=kind=>done.filter(i=>i.kind===kind).reduce((s,i)=>s+ia(i,m),0);
+  const inc=sum('in'),fixed=sum('fixed'),jar=sum('jar'),momoPaid=sum('momo'),lev=sum('lev');
+  const cashSpent=spent-momoTx;
+  return {m,p,spent,byCat,k1,k2:spent-k1,momoTx,lev,momoUse:momoTx+lev,momoPaid,inc,extraIn,fixed,jar,cashSpent,
+    flow:inc+extraIn-fixed-momoPaid-jar-cashSpent};
+}
+function cashOf(k){let bal=0,key=st(),open=0;while(key<=k){open=bal;bal+=monthStats(key).flow;key=addM(key,1)}return {open,bal}}
+function jarBalance(id){
+  let b=0;Object.keys(S.months).filter(k=>k>=st()).forEach(k=>{const m=month(k);plan(k).items.forEach(i=>{if(i.kind==='jar'&&i.jar===id&&m.checks[i.id])b+=ia(i,m)})});
+  S.jarlog.forEach(l=>{if(l.jar===id)b+=l.amt});return b;
+}
+const tone=p=>p>1?'bad':p>=.8?'warn':'good';
+const usesWallet=()=>S.cfg.openDebt>0||S.cfg.cap>0||S.rec.some(r=>r.kind==='lev'||r.kind==='momo')||Object.values(S.months).some(m=>(m.tx||[]).some(t=>t.src==='momo'));
+const line=(l,v)=>`<div class="fl"><span>${l}</span><b>${v>0?'+':v<0?'−':''}${vnd(Math.abs(v))}</b></div>`;
+
+// ---------- giao diện ----------
 function catBar(c,spent,budget){
-  const p=budget?spent/budget:0,t=tone(p),left=budget-spent;
+  const p=budget?spent/budget:(spent?2:0),t=tone(p),left=budget-spent;
   return `<div class="cat ${c.id==='gai'?'star':''}">
     <div class="row"><span class="name"><span class="dot" style="background:var(${c.v})"></span>${c.name}</span>
     <span class="small"><b>${tr(spent)}</b> <span class="muted">/ ${tr(budget)}</span></span></div>
     <div class="bar"><i style="width:${Math.min(100,p*100)}%;background:var(${p>1?'--bad':c.v})"></i></div>
-    <div class="row small"><span class="pill ${t}" style="padding:2px 9px">${p>1?'Lố '+tr(-left):'Còn '+tr(left)}</span><span class="muted">${Math.round(p*100)}%</span></div>
+    <div class="row small"><span class="pill ${t}" style="padding:2px 9px">${left<0?'Lố '+tr(-left):'Còn '+tr(left)}</span><span class="muted">${budget?Math.round(p*100)+'%':''}</span></div>
   </div>`;
 }
 function chkItem(i,m,k){
   const done=!!m.checks[i.id];
   const cls={in:'in',fixed:'out',momo:'mo',jar:'jr',lev:'mo'}[i.kind];
   const sign=i.kind==='in'?'+':i.kind==='lev'?'+nợ ':'−';
+  const edited=m.amts&&m.amts[i.id]!=null&&!(m.auto&&m.auto[i.id]);
+  const extra=i.kind==='lev'?' (trả bằng ví, cộng vào nợ ví)':'';
   return `<label class="chk ${done?'done':''} ${i.hot&&!done?'hot':''}"><input type="checkbox" data-chk="${i.id}" data-k="${k}" ${done?'checked':''}>
-    <span class="t">${esc(i.label)}</span><button type="button" class="amt amtbtn ${cls}" data-edit="${i.id}" data-k="${k}" data-v="${ia(i,m)}" title="Bấm để sửa số tiền thực tế">${sign}${tr(ia(i,m))}${m.amts&&m.amts[i.id]!=null&&!(m.auto&&m.auto[i.id])?' ✎':''}</button></label>`;
+    <span class="t">${esc(i.label)}${extra}${i.sub?`<br><span class="small muted">${i.sub}</span>`:''}</span><button type="button" class="amt amtbtn ${cls}" data-edit="${i.id}" data-k="${k}" data-v="${ia(i,m)}" title="Bấm để sửa số tiền thực tế tháng này">${sign}${tr(ia(i,m))}${edited?' ✎':''}</button></label>`;
 }
-function dayCard(day,items,cap,spend,m,k){
-  return `<div class="card"><div class="dayhead"><div class="daynum">${day}</div><div><h3 style="font-size:16px">Ngày ${day} — ${day===1?'lương 8tr':'lương 5tr'}</h3>
-  <div class="small muted">Kỳ này được chi <b style="color:var(--ink)">${tr(spend)}</b> bằng tiền thịt${day===1?`, giữ lại <b style="color:var(--ink)">${tr(plan(k).keep)}</b> cho kỳ 15`:''}</div></div></div>
-  <div class="small muted" style="margin-bottom:2px">Tick khi đã làm xong. Số thực tế khác thì bấm vào số tiền để sửa.</div>
-  ${items.map(i=>chkItem(i,m,k)).join('')}
-  </div>`;
+function dayCards(k,s){
+  const p=s.p,m=s.m;
+  if(!p.items.length)return `<div class="card empty"><b>Chưa có khoản thu chi cố định nào</b><span class="small muted">Thêm lương, tiền nhà, điện nước, trả góp, bỏ hũ… để app tự tính tiền được chi mỗi tháng.</span><button class="btn sm" data-goto="fixed">Thêm khoản cố định</button></div>`;
+  const days=[...new Set(p.items.map(i=>i.day))];
+  const first1=days.find(d=>d<15),first2=days.find(d=>d>=15);
+  return days.map(day=>{const its=p.items.filter(i=>i.day===day),inc=its.filter(i=>i.kind==='in').reduce((a,i)=>a+ia(i,m),0);
+    let sub='';
+    if(day===first1)sub=`Kỳ 1 (ngày 1–14) được chi <b style="color:var(--ink)">${tr(p.k1b)}</b>${p.keep>0?`, giữ lại <b style="color:var(--ink)">${tr(p.keep)}</b> cho kỳ 15`:''}`;
+    if(day===first2)sub=`Kỳ 2 được chi phần còn lại của tháng: <b style="color:var(--ink)">${tr(p.spend-p.k1b)}</b>`;
+    return `<div class="card"><div class="dayhead"><div class="daynum">${day}</div><div><h3 style="font-size:16px">Ngày ${day}${inc?` · thu ${tr(inc)}`:''}</h3>
+    ${sub?`<div class="small muted">${sub}</div>`:''}</div></div>
+    ${its.map(i=>chkItem(i,m,k)).join('')}</div>`}).join('')
+    +`<div class="small muted" style="padding:0 4px">Tick khi đã làm xong. Tháng này số thực tế khác thì bấm vào số tiền để sửa. Muốn đổi hẳn cho các tháng sau thì vào tab Thu chi cố định.</div>`;
 }
 function home(){
   const k=viewKey,s=monthStats(k),p=s.p,D=dim(k);
-  const isCur=k===todayKey, isFuture=k>todayKey;
+  const isCur=k===todayKey,isFuture=k>todayKey;
   const d=isCur?today.getDate():(isFuture?1:D);
   const ky=d<15?0:1;
-  const kyBudget=p.spend[ky], kyLeft=ky?p.sumB-s.spent:kyBudget-s.k1; // kỳ 15: tính luôn phần kỳ 1 chi dư/lố
-  const kyEnd=ky?D:14, daysLeft=isCur?kyEnd-d+1:(isFuture?(ky?D-14:14):1);
+  const kyLeft=ky?p.spend-s.spent:p.k1b-s.k1;
+  const kyEnd=ky?D:14,daysLeft=isCur?kyEnd-d+1:(isFuture?(ky?D-14:14):1);
   const perDay=Math.max(0,kyLeft)/Math.max(1,daysLeft);
-  const monthLeft=p.sumB-s.spent;
-  const debt=momoDebt(k), capLeft=MOMO_CAP-s.momoUse;
-  const cash=cashOf(k), dOpen=debtOpen(k), lateBefore=k>START?lateOf(addM(k,-1)):0;
-  const dueLeft=s.momoDue-s.momoPaidAll;
-  const line=(l,v,c)=>`<div class="fl"><span>${l}</span><b style="${c?'color:'+c:''}">${v>0?'+':v<0?'−':''}${vnd(Math.abs(v))}</b></div>`;
+  const monthLeft=p.spend-s.spent;
+  const cash=cashOf(k);
+  const wallet=usesWallet();
+  let walletCard='';
+  if(wallet){
+    const debt=momoDebt(k),cap=S.cfg.cap,capLeft=cap-s.momoUse,dOpen=debtOpen(k),lateBefore=k>st()?lateOf(addM(k,-1)):0;
+    const mo=p.items.filter(i=>i.kind==='momo'),paid=mo.filter(i=>s.m.checks[i.id]).reduce((a,i)=>a+ia(i,s.m),0),dueLeft=p.B-paid;
+    const pk=addM(k,-1),prevLevMiss=k>st()&&pk<todayKey&&recOf(pk).some(r=>r.kind==='lev'&&!month(pk).checks[r.id]);
+    walletCard=`<div class="card momo-card">
+      <div class="row"><span class="label" style="color:var(--momo)">Đòn bẩy · Ví Trả Sau</span>${cap?`<span class="pill momo" style="background:var(--surface)">Trần ${tr(cap)}/tháng</span>`:''}</div>
+      <div class="big">${vnd(debt)}</div>
+      <div class="small" style="margin-top:-6px">Đang nợ ví. Khoản trả bằng ví và mọi lần quẹt ví cộng vào đây, không trừ tiền thịt.</div>
+      <div class="flow momo-flow">${line('Nợ đầu tháng',dOpen)}${line('Khoản cố định trả bằng ví',s.lev)}${line('Quẹt thêm',s.momoTx)}${line('Đã trả ví',-s.momoPaid)}</div>
+      ${cap?`<div class="small">Đã dùng ${tr(s.momoUse)} / ${tr(cap)} · còn dư <b style="color:${capLeft<0?'var(--bad)':'var(--momo)'}">${tr(Math.max(0,capLeft))}</b></div>
+      <div class="bar" style="background:var(--surface)"><i style="width:${Math.min(100,s.momoUse/cap*100)}%;background:${capLeft<0?'var(--bad)':'var(--momo)'}"></i></div>`:''}
+      <div class="duebox"><div class="row"><b>Tháng này trả hoá đơn ${mName(pk)}</b><b>${tr(p.B)}</b></div>
+        ${mo.length?`<div class="small">${mo.map(i=>`Ngày ${i.day}: ${tr(ia(i,s.m))} ${s.m.checks[i.id]?'<span style="color:var(--good);font-weight:700">✓ đã trả</span>':''}`).join(' · ')}</div>`:`<div class="small" style="color:var(--bad)">Chưa có khoản “Trả hoá đơn ví” trong Thu chi cố định.</div>`}
+        <div class="small muted">Hạn chót ${Math.min(S.cfg.due,D)}/${+k.slice(5)}. Trả đủ trước hạn = 0đ phạt.</div>
+        <div class="small" style="margin-top:4px">Còn phải trả: <b style="color:${dueLeft>0?'var(--momo)':'var(--good)'}">${tr(dueLeft)}</b></div></div>
+      ${cap&&capLeft<0?'<div class="warnbox">Đã vượt trần. Phần lố sẽ ăn vào tiền tháng sau.</div>':''}
+      ${lateBefore>0?`<div class="warnbox">Hoá đơn ${mName(addM(k,-2))} còn thiếu ${vnd(lateBefore)}, đã quá hạn và đang bị phạt. Trả ngay phần này trước.</div>`:''}
+      ${dueLeft>0&&isCur&&d>=S.cfg.due-3&&todayStr<=dueStr(k)?`<div class="warnbox">Còn ${vnd(dueLeft)} phải trả trước hết ngày ${S.cfg.due}/${+k.slice(5)}. Trễ 1–4 ngày phạt 5,25%, quá 10 ngày bị báo CIC.</div>`:''}
+      ${dueLeft>0&&todayStr>dueStr(k)?`<div class="warnbox">Hoá đơn ${mName(pk)} còn thiếu ${vnd(dueLeft)}, đã quá hạn. Trả ngay rồi bấm vào số tiền ở ô trả ví sửa thành số đã trả thật.</div>`:''}
+      ${prevLevMiss?`<div class="warnbox">${mName(pk)[0].toUpperCase()+mName(pk).slice(1)} còn khoản “Trả bằng Ví Trả Sau” chưa tick. Nếu đã trả thì quay lại tháng đó tick vào, không thì nợ ví và hoá đơn sẽ sai.</div>`:''}
+    </div>`;
+  }
   return `
   <section class="grid g2" style="margin-top:6px">
     <div class="hero">
-      <div class="row"><span class="label">Tiền thịt của bạn · tiền mặt + bank</span>${p.oct?'<span class="pill">Bắt đầu từ 0</span>':''}</div>
+      <div class="row"><span class="label">Tiền thịt của bạn · tiền mặt + bank</span>${k===st()?'<span class="pill">Bắt đầu từ 0</span>':''}</div>
       <div class="big">${cash.bal<0?'−':''}${vnd(Math.abs(cash.bal))}</div>
       <div class="flow">
         ${cash.open?line('Dư tháng trước',cash.open):''}
-        ${line('Lương đã nhận',s.inc)}
-        ${line('Tiền nước',-s.fixed)}
-        ${line('Trả ví trả sau',-s.momoPaidAll)}
+        ${line('Thu cố định đã nhận',s.inc)}
+        ${s.extraIn?line('Thu thêm',s.extraIn):''}
+        ${s.fixed?line('Chi cố định',-s.fixed):''}
+        ${s.momoPaid||wallet?line('Trả ví trả sau',-s.momoPaid):''}
         ${s.jar?line('Bỏ hũ',-s.jar):''}
-        ${line('Chi bằng tiền thịt',-s.cashSpent)}
+        ${line('Chi tiêu bằng tiền thịt',-s.cashSpent)}
       </div>
-      ${cash.bal<0?'<div class="warnbox" style="background:#fff;color:#D92D45">Tiền thịt đang âm. Tick “Nhận lương” nếu đã nhận, hoặc đang chi quá số tiền đang có.</div>':''}
+      ${cash.bal<0?'<div class="warnbox" style="background:#fff;color:#D92D45">Tiền thịt đang âm. Tick khoản thu nếu đã nhận, hoặc đang chi quá số tiền đang có.</div>':''}
       <div class="hero-row"><span class="pill">${ky?'Kỳ 15→cuối (đã tính dư/lố kỳ 1)':'Kỳ 1→14'} còn được chi ${tr(kyLeft)}</span><span class="pill">≈ ${tr(perDay)}/ngày · ${daysLeft} ngày</span></div>
     </div>
-    <div class="card momo-card">
-      <div class="row"><span class="label" style="color:var(--momo)">Đòn bẩy · MoMo Trả Sau</span><span class="pill momo" style="background:var(--surface)">Trần 3tr/tháng = tiền điện</span></div>
-      <div class="big">${vnd(debt)}</div>
-      <div class="small" style="margin-top:-6px">Đang nợ ví. Điện và mọi khoản quẹt MoMo cộng vào đây, không trừ tiền thịt.</div>
-      <div class="flow momo-flow">
-        ${line('Nợ đầu tháng',dOpen)}
-        ${line('Tiền điện (trả bằng ví)',s.lev)}
-        ${line('Quẹt thêm',s.momoTx)}
-        ${line('Đã trả ví',-s.momoPaid)}
-      </div>
-      <div class="small">Đã dùng ${tr(s.momoUse)} / 3tr · còn dư <b style="color:${capLeft<0?'var(--bad)':'var(--momo)'}">${tr(Math.max(0,capLeft))}</b></div>
-      <div class="bar" style="background:var(--surface)"><i style="width:${Math.min(100,s.momoUse/MOMO_CAP*100)}%;background:${capLeft<0?'var(--bad)':'var(--momo)'}"></i></div>
-      <div class="duebox"><div class="row"><b>Tháng này trả hoá đơn tháng ${+addM(k,-1).slice(5)}</b><b>${tr(s.momoDue)}</b></div>
-        <div class="small">${[...p.d1,...p.d15].filter(i=>i.kind==='momo').map(i=>`Ngày ${i.id.startsWith('d1-')?1:15}: ${tr(ia(i,s.m))} ${s.m.checks[i.id]?'<span style="color:var(--good);font-weight:700">✓ đã trả</span>':''}`).join(' · ')}</div><div class="small muted">= dùng ví tháng ${+addM(k,-1).slice(5)}${k>START?' + 33k phí':''}${lateBefore?' + phần trễ':''}. Hạn chót 15/${+k.slice(5)}, trả đủ trước hạn = 0đ phạt.</div>
-        <div class="small" style="margin-top:4px">Còn phải trả: <b style="color:${dueLeft>0?'var(--momo)':'var(--good)'}">${tr(dueLeft)}</b></div></div>
-      ${capLeft<0?'<div class="warnbox">Đã vượt trần 3tr. Phần lố sẽ ăn vào tiền tháng sau.</div>':''}
-      ${lateBefore>0?`<div class="warnbox">Hoá đơn tháng ${+addM(k,-2).slice(5)} còn thiếu ${vnd(lateBefore)}, đã quá hạn và đang bị phạt. Trả ngay phần này trước.</div>`:''}
-      ${dueLeft>0&&isCur&&d>=12&&d<=15?`<div class="warnbox">Còn ${vnd(dueLeft)} phải trả trước hết ngày 15/${+k.slice(5)}. Trễ 1–4 ngày phạt 5,25%, quá 10 ngày bị báo CIC.</div>`:''}
-      ${dueLeft>0&&todayStr>`${k}-15`?`<div class="warnbox">Hoá đơn tháng ${+addM(k,-1).slice(5)} còn thiếu ${vnd(dueLeft)}, đã quá hạn 15/${+k.slice(5)}. Trả ngay rồi bấm vào số tiền ở ô ngày 15 sửa thành số đã trả thật.</div>`:''}
-      ${k>START&&!month(addM(k,-1)).checks['d1-dien']&&addM(k,-1)<todayKey?`<div class="warnbox">Tháng ${+addM(k,-1).slice(5)} chưa tick “Trả tiền điện bằng Ví Trả Sau”. Nếu đã trả thì quay lại tháng đó tick vào, không thì nợ ví và hoá đơn sẽ sai.</div>`:''}
-    </div>
+    ${walletCard||`<div class="card"><div class="label">Tháng ${+k.slice(5)} tóm tắt</div><div class="flow" style="margin-top:8px">${line('Thu',s.inc+s.extraIn)}${line('Chi tiêu',-s.spent)}${line('Chi cố định',-s.fixed)}${line('Bỏ hũ',-s.jar)}</div></div>`}
   </section>
   <section class="grid g2" style="margin-top:14px">
     <div class="card">
-      <div class="sec-title"><h2>Ngân sách theo mục</h2><span class="small muted">Cả tháng còn <b style="color:var(${monthLeft<0?'--bad':'--good'})">${tr(monthLeft)}</b></span></div>
-      ${p.adj?`<div class="${p.adj<0?'warnbox':'okbox'}" style="margin-bottom:8px">Điều chỉnh tháng này ${p.adj>0?'+':'−'}${tr(Math.abs(p.adj))}: tiền điện tháng trước hoặc tiền nước ${p.adj<0?'cao':'thấp'} hơn kế hoạch. Tổng được chi còn ${tr(p.sumB)}.</div>`:''}
+      <div class="sec-title"><h2>Ngân sách theo mục</h2><span class="small muted">Được chi ${tr(p.spend)} · còn <b style="color:var(${monthLeft<0?'--bad':'--good'})">${tr(monthLeft)}</b></span></div>
+      ${p.extraIn?`<div class="okbox" style="margin-bottom:8px">Tháng này thu thêm ${tr(p.extraIn)}, đã cộng vào tiền được chi.</div>`:''}
       ${CATS.map(c=>catBar(c,s.byCat[c.id]||0,S.budgets[c.id]||0)).join('')}
     </div>
-    <div class="grid">
-      ${dayCard(1,p.d1,p.cap[0],p.spend[0],s.m,k)}
-      ${dayCard(15,p.d15,p.cap[1],p.spend[1],s.m,k)}
-    </div>
+    <div class="grid">${dayCards(k,s)}</div>
   </section>`;
+}
+function txRow(t){
+  const isIn=t.type==='in',c=isIn?(INCATS.find(c=>c.id===t.cat)||INCATS[4]):(CATS.find(c=>c.id===t.cat)||CATS[5]);
+  return `<div class="tx" data-open="${t.id}" role="button" tabindex="0"><div class="ic" style="background:var(${isIn?'--good':c.v})">${c.ab}</div>
+    <div><div style="font-weight:600">${esc(t.note||c.name)}</div><div class="small muted">${c.name} · ${isIn?'<span style="color:var(--good);font-weight:600">Thu vào tiền thịt</span>':t.src==='momo'?'<span style="color:var(--momo);font-weight:600">Quẹt ví</span>':'Tiền thịt'}</div></div>
+    <div style="text-align:right;font-weight:700;color:${isIn?'var(--good)':'var(--ink)'}">${isIn?'+':'−'}${vnd(t.amt)}<div class="small muted" style="font-weight:500">Sửa</div></div></div>`;
 }
 function txView(){
   const k=viewKey,s=monthStats(k);
@@ -386,70 +420,66 @@ function txView(){
   const byDay={};list.forEach(t=>(byDay[t.d]=byDay[t.d]||[]).push(t));
   const days=Object.keys(byDay);
   return `<section class="grid" style="margin-top:6px">
-  <div class="card"><div class="row" style="flex-wrap:wrap"><div><div class="label">Tổng đã chi tháng ${+k.slice(5)}</div><div class="big" style="font-size:32px">${vnd(s.spent)}</div></div>
-  <div class="hero-row"><span class="pill acc">Tiền thịt ${tr(s.spent-s.momoTx)}</span><span class="pill momo">Quẹt MoMo ${tr(s.momoTx)}</span></div></div></div>
-  <div class="card">${days.length?days.map(d=>`<div style="margin-bottom:10px"><div class="label" style="margin-bottom:4px">${+d.slice(8)}/${+d.slice(5,7)} · ${tr(byDay[d].reduce((a,t)=>a+t.amt,0))}</div>
-    ${byDay[d].map(t=>{const c=CATS.find(c=>c.id===t.cat)||CATS[5];return `<div class="tx"><div class="ic" style="background:var(${c.v})">${c.ab}</div>
-      <div><div style="font-weight:600">${esc(t.note||c.name)}</div><div class="small muted">${c.name} · ${t.src==='momo'?'<span style="color:var(--momo);font-weight:600">Đòn bẩy MoMo</span>':'Tiền thịt'}</div></div>
-      <div style="text-align:right"><div style="font-weight:700">−${vnd(t.amt)}</div><button class="del" data-del="${t.id}">Xoá</button></div></div>`}).join('')}</div>`).join(''):
-    `<div class="muted" style="text-align:center;padding:24px 0">Chưa có khoản chi nào trong tháng ${+k.slice(5)}.<br>Bấm <b style="color:var(--momo)">+ Ghi chi tiêu</b> mỗi lần tiêu tiền, mất 5 giây.</div>`}
+  <div class="card"><div class="grid g2" style="gap:10px">
+    <div><div class="label">Đã chi ${mName(k)}</div><div class="big" style="font-size:30px">${vnd(s.spent)}</div>
+      <div class="hero-row" style="margin-top:6px"><span class="pill acc">Tiền thịt ${tr(s.spent-s.momoTx)}</span>${s.momoTx?`<span class="pill momo">Quẹt ví ${tr(s.momoTx)}</span>`:''}</div></div>
+    <div><div class="label">Thu thêm ${mName(k)}</div><div class="big" style="font-size:30px;color:var(--good)">${vnd(s.extraIn)}</div>
+      <div class="small muted" style="margin-top:6px">Ngoài các khoản thu cố định (lương…)</div></div></div></div>
+  <div class="card">${days.length?days.map(d=>{const o=byDay[d];const out=sumAmt(o.filter(t=>t.type!=='in')),inn=sumAmt(o.filter(t=>t.type==='in'));
+    return `<div style="margin-bottom:10px"><div class="label" style="margin-bottom:4px">${+d.slice(8)}/${+d.slice(5,7)}${out?' · chi '+tr(out):''}${inn?' · thu '+tr(inn):''}</div>${o.map(txRow).join('')}</div>`}).join(''):
+    `<div class="muted" style="text-align:center;padding:24px 0">Chưa có giao dịch nào trong ${mName(k)}.<br>Bấm <b style="color:var(--momo)">+ Ghi thu chi</b> mỗi lần tiêu hay nhận tiền.</div>`}
+  </div></section>`;
+}
+function fixedView(){
+  const k=viewKey,p=plan(k),m=month(k);
+  const days=[...new Set(p.items.map(i=>i.day))];
+  const tot=kind=>p.items.filter(i=>i.kind===kind).reduce((a,i)=>a+i.amt,0);
+  const recRow=i=>{const r=S.rec.find(x=>x.id===i.id)||i;
+    const amtTxt=i.kind==='momo'?(r.mode==='rest'?'Phần còn lại':'Tối đa '+tr(r.amt)):tr(r.amt);
+    return `<div class="rec"><div><div style="font-weight:600">${esc(r.label)}</div><span class="kpill k-${i.kind}">${KINDS[i.kind]}${i.kind==='jar'?' · '+esc((JARS().find(j=>j.id===i.jar)||{}).name||''):''}</span>${r.from&&r.from>st()?` <span class="small muted">từ ${mName(r.from)}</span>`:''}</div>
+      <b class="${i.kind==='in'?'':''}" style="white-space:nowrap;color:var(${i.kind==='in'?'--good':i.kind==='jar'?'--jar':i.kind==='fixed'?'--ink':'--momo'})">${i.kind==='in'?'+':i.kind==='lev'?'+nợ ':'−'}${amtTxt}</b>
+      <button class="btn sm ghost" data-rec="${i.id}">Sửa</button></div>`};
+  return `<section class="grid" style="margin-top:6px">
+  <div class="card">
+    <div class="sec-title"><h2>Thu chi cố định hằng tháng</h2><button class="btn sm" data-rec="new">+ Thêm khoản</button></div>
+    <p class="note" style="margin-top:0">Những khoản lặp lại mỗi tháng: lương, tiền nhà, điện nước, trả góp, bỏ hũ… App tự đưa vào checklist từng tháng. Đang xem ${mName(k)}.</p>
+    ${days.length?days.map(d=>`<div style="margin-top:8px"><div class="label">Ngày ${d}</div>${p.items.filter(i=>i.day===d).map(recRow).join('')}</div>`).join(''):'<div class="empty"><b>Chưa có khoản nào</b><span class="small muted">Bắt đầu bằng khoản lương hoặc tiền trợ cấp hằng tháng.</span></div>'}
+  </div>
+  <div class="card">
+    <div class="sec-title"><h2>Mỗi tháng ${mName(k)} tiền đi đâu</h2></div>
+    <div class="flow">${line('Thu cố định',p.inP)}${p.extraIn?line('Thu thêm (đã ghi)',p.extraIn):''}${line('Chi cố định bằng tiền thịt',-p.fixP)}${line('Trả hoá đơn ví (phần tính vào tháng này)',-p.billB)}${line('Bỏ hũ',-p.jarP)}</div>
+    <div class="row" style="margin-top:10px"><b>Còn lại để chi tiêu</b><b style="font-size:20px;color:var(${p.spend<0?'--bad':'--good'})">${vnd(p.spend)}</b></div>
+    ${tot('lev')?`<p class="note">Các khoản “Trả bằng Ví Trả Sau” (${tr(tot('lev'))}) không trừ tiền thịt tháng này. Chúng vào hoá đơn ví và được trả tháng sau.</p>`:''}
+  </div>
+  <div class="card">
+    <div class="sec-title"><h2>Cài đặt Ví Trả Sau</h2></div>
+    <div class="grid g2" style="gap:10px">
+      <div class="field"><label class="small" for="cf-openDebt" style="font-weight:600">Hoá đơn ví phải trả trong ${mName(st())}</label><input id="cf-openDebt" data-cfg="openDebt" inputmode="numeric" value="${S.cfg.openDebt.toLocaleString('vi-VN')}"></div>
+      <div class="field"><label class="small" for="cf-fee" style="font-weight:600">Phí dịch vụ mỗi tháng có dùng ví</label><input id="cf-fee" data-cfg="fee" inputmode="numeric" value="${S.cfg.fee.toLocaleString('vi-VN')}"></div>
+      <div class="field"><label class="small" for="cf-due" style="font-weight:600">Ngày hạn thanh toán</label><input id="cf-due" data-cfg="due" inputmode="numeric" value="${S.cfg.due}"></div>
+      <div class="field"><label class="small" for="cf-cap" style="font-weight:600">Trần tự đặt mỗi tháng (0 = không đặt)</label><input id="cf-cap" data-cfg="cap" inputmode="numeric" value="${S.cfg.cap.toLocaleString('vi-VN')}"></div>
+      <div class="field"><label class="small" for="cf-start" style="font-weight:600">Bắt đầu theo dõi từ tháng</label><input id="cf-start" data-cfg="start" type="month" value="${st()}"></div>
+    </div>
+    <p class="note">Không dùng Ví Trả Sau thì để tất cả bằng 0, thẻ ví sẽ tự ẩn.</p>
   </div></section>`;
 }
 function planView(){
-  const segs=[['Điện + nước',3400000,'--c-khac'],['Chi tiêu',PLAN_SPEND,'--accent'],['Phí MoMo',33000,'--momo'],['Hũ để dành',1500000,'--jar']];
-  const sumB=CATS.reduce((a,c)=>a+(S.budgets[c.id]||0),0), diff=sumB-PLAN_SPEND;
+  const k=viewKey,p=plan(k),sumB=CATS.reduce((a,c)=>a+(S.budgets[c.id]||0),0),diff=sumB-p.spend;
+  let personal='';
+  
   return `<section class="grid" style="margin-top:6px">
-  <div class="card" style="border:2px solid var(--good)">
-    <span class="pill good">Kết luận</span>
-    <h2 style="font-size:20px;margin-top:10px">Dùng đòn bẩy MoMo 3tr/tháng là vừa. Không tăng thêm.</h2>
-    <ul class="clean small" style="margin-top:10px">
-      <li><b>3tr đòn bẩy = đúng tiền điện</b>, trả bằng Ví Trả Sau ngày 1. Bằng 15% hạn mức 20tr, mỗi đợt lương chỉ trả lại 1,5tr, không đợt nào bị “nghẹt”.</li>
-      <li>Điện đã ăn hết 3tr, nên ăn uống, gái, bạn bè… <b>chi bằng tiền thịt</b>. Quẹt MoMo thêm là đang vay vượt trần.</li>
-      <li>Gối đầu <b>không tạo thêm tiền</b>, nó chỉ dời thời điểm trả. Tháng nào dùng ví quá 3tr thì tháng sau có ít tiền hơn đúng bằng phần lố.</li>
-      <li>Ví Trả Sau <b>không tính lãi</b>. Khoản 33k là <b>phí dịch vụ</b> mỗi tháng có giao dịch (từ tháng giao dịch thứ 6). Tính ra khoảng 13%/năm trên 3tr gối đầu.</li>
-      <li>Khi hũ Khẩn cấp đạt 3tr (dự kiến tháng 1/2027), bạn có thể tự gối đầu bằng tiền mình và bỏ MoMo, tiết kiệm ~400k/năm.</li>
-    </ul>
-  </div>
   <div class="card">
-    <div class="sec-title"><h2>Tháng 10: không cần defer</h2></div>
-    <p class="small muted" style="margin:0 0 12px">Hoá đơn tháng 9 trên app là 3.088.000đ, hạn 15/10. Chia 2 lần là trả xong đúng hạn:</p>
-    <div class="grid g2">
-      <div class="opt win"><span class="pill good" style="justify-self:start">Chọn cách này</span><b>Trả 1,5tr ngày 1 + 1,588tr ngày 15</b><div class="price" style="color:var(--good)">0đ thêm</div><div class="small">Tháng 10 vẫn bỏ hũ được 1,445tr. Chi tiêu giữ nguyên 8,067tr.</div></div>
-      <div class="opt"><span class="pill warn" style="justify-self:start">Không cần</span><b>Trả góp 3–12 tháng</b><div class="price" style="color:var(--warn)">phí 3%/tháng</div><div class="small">Chỉ dùng khi thật sự không đủ tiền trả trước 15/10.</div></div>
-      <div class="opt lose"><span class="pill bad" style="justify-self:start">Tránh</span><b>Để qua ngày 15</b><div class="price" style="color:var(--bad)">phạt từ 5,25%</div><div class="small">Quá 10 ngày bị báo CIC nhóm 2, sau 5 ngày bị khoá thanh toán.</div></div>
-    </div>
-    <div class="tbl-wrap" style="margin-top:14px"><table>
-      <thead><tr><th>Số ngày trễ</th><th class="r">Phí phạt (trên số tiền trễ)</th><th class="r">Nếu trễ 1,5tr</th></tr></thead>
-      <tbody><tr><td>1–4 ngày</td><td class="r">5,25%</td><td class="r">78.750đ</td></tr><tr><td>5–9 ngày</td><td class="r">10,5%</td><td class="r">157.500đ</td></tr>
-      <tr><td>10–14 ngày</td><td class="r">15,75%</td><td class="r">236.250đ</td></tr><tr><td>Từ 15 ngày</td><td class="r" style="color:var(--bad);font-weight:700">21%</td><td class="r" style="color:var(--bad);font-weight:700">315.000đ</td></tr></tbody></table></div>
-  </div>
-  <div class="card">
-    <div class="sec-title"><h2>13tr mỗi tháng đi đâu (từ tháng 11)</h2></div>
-    <div class="stack">${segs.map(s=>`<div style="flex:${s[1]};background:var(${s[2]})">${s[1]>1e6?tr(s[1]):''}</div>`).join('')}</div>
-    <div class="legend">${segs.map(s=>`<span><span class="dot" style="background:var(${s[2]})"></span>${s[0]} <b>${tr(s[1])}</b></span>`).join('')}</div>
-    <div class="tbl-wrap" style="margin-top:14px"><table>
-      <thead><tr><th></th><th class="r">Ngày 1</th><th class="r">Ngày 15</th></tr></thead>
-      <tbody>
-      <tr><td>Lương vào</td><td class="r" style="color:var(--good)">+8tr</td><td class="r" style="color:var(--good)">+5tr</td></tr>
-      <tr><td>Tiền điện (Ví Trả Sau)</td><td class="r" style="color:var(--momo)">+3tr nợ ví</td><td class="r">—</td></tr>
-      <tr><td>Tiền nước</td><td class="r">−400k</td><td class="r">—</td></tr>
-      <tr><td>Trả ví (hoá đơn tháng trước)</td><td class="r" style="color:var(--momo)">−1,5tr</td><td class="r" style="color:var(--momo)">−1,533tr</td></tr>
-      <tr><td>Bỏ hũ</td><td class="r" style="color:var(--jar)">−750k</td><td class="r" style="color:var(--jar)">−750k</td></tr>
-      <tr><td>Giữ lại cho kỳ 15</td><td class="r">−1,533tr</td><td class="r" style="color:var(--good)">+1,533tr</td></tr>
-      <tr><td><b>Được chi trong kỳ</b></td><td class="r"><b>3,817tr</b></td><td class="r"><b>4,25tr</b></td></tr>
-      </tbody></table></div>
-    <p class="note">Hoá đơn ví chốt cuối tháng, hạn thanh toán ngày 15 tháng sau. Tiền điện quẹt ngày 1/10 nằm trong hoá đơn tháng 10, hạn 15/11. Nợ ví không tăng dần: lúc nào cũng chỉ khoảng 3tr tiền điện của tháng đang chạy, cộng phần hoá đơn cũ chưa tới hạn. Tháng 10 ngày 15 trả 1,588tr (hoá đơn T9 là 3,088tr) và bỏ hũ 695k.</p>
-  </div>
-  <div class="card">
-    <div class="sec-title"><h2>Chỉnh ngân sách</h2></div>
-    <p class="note" style="margin-top:0">Ăn uống 2tr ≈ 67k/ngày. Gái & quà cáp để 4tr, tháng nào lên 4,5tr thì lấy 500k từ Bạn bè + Chi phí khác, đừng lấy từ hũ.</p>
+    <div class="sec-title"><h2>Chia tiền chi tiêu ${mName(k)}</h2></div>
+    <div class="row"><span>Tiền được chi (từ Thu chi cố định)</span><b>${vnd(p.spend)}</b></div>
+    <div class="row"><span>Đã chia cho các mục</span><b>${vnd(sumB)}</b></div>
+    <div style="margin:10px 0" class="${diff===0?'okbox':'warnbox'}">${diff===0?'Chia vừa khớp.':diff>0?`Đang chia dư ${vnd(diff)} so với tiền có. Bớt vài mục lại.`:`Còn ${vnd(-diff)} chưa chia. Có thể thêm vào hũ hoặc để dự phòng.`}</div>
     <div class="grid g2">${CATS.map(c=>`<div class="field"><label for="b-${c.id}" class="small" style="font-weight:600"><span class="dot" style="display:inline-block;background:var(${c.v})"></span> ${c.name}</label>
       <input id="b-${c.id}" inputmode="numeric" data-budget="${c.id}" value="${(S.budgets[c.id]||0).toLocaleString('vi-VN')}"></div>`).join('')}</div>
-    <div style="margin-top:12px" class="${diff===0?'okbox':'warnbox'}">${diff===0?'Tổng 8.067.000đ, khớp đúng dòng tiền.':`Tổng đang ${diff>0?'dư':'thiếu'} ${vnd(Math.abs(diff))} so với 8.067.000đ. ${diff>0?'Bớt mục khác lại cho khớp.':'Phần thiếu có thể bỏ thêm vào hũ.'}`}</div>
   </div>
+  ${personal}
   <div class="card">
     <div class="sec-title"><h2>Sao lưu & chuyển máy</h2></div>
-    <p class="note" style="margin-top:0">Dữ liệu nằm trong máy này. Mỗi tuần bấm sao lưu một lần. Đổi máy hay cài lại app thì khôi phục từ file hoặc đoạn chữ đã copy.</p>
+    <p class="note" style="margin-top:0">Dữ liệu nằm trong máy này. Mỗi tuần sao lưu một lần. Đổi máy hay cài lại app thì khôi phục từ file hoặc đoạn đã copy. Bản sao lưu gồm cả thu chi cố định và cài đặt.</p>
     <div class="row" style="flex-wrap:wrap;justify-content:flex-start;gap:8px">
       ${window.claude?'':'<button class="btn sm" data-bk="file">Tải file sao lưu</button>'}
       <button class="btn sm ghost" data-bk="copy">Copy dữ liệu</button>
@@ -459,108 +489,175 @@ function planView(){
     <div class="field" style="margin-top:10px"><label class="label" for="bkText">Hoặc dán dữ liệu đã copy</label>
       <textarea id="bkText" rows="3" style="border:1.5px solid var(--line);border-radius:12px;padding:10px;background:var(--bg);width:100%;font:13px/1.4 ui-monospace,monospace"></textarea>
       <button class="btn sm" data-bk="paste" style="justify-self:start">Khôi phục từ đoạn đã dán</button></div>
-  </div>
-  <div class="card small">
-    <div class="label" style="margin-bottom:6px">Nguồn (MoMo, cập nhật phí từ 1/4/2026)</div>
-    <ul class="clean">
-      <li><a href="https://www.momo.vn/hoi-dap/phi-cham-tra-vi-tra-sau" target="_blank" rel="noopener">Phí chậm trả Ví Trả Sau</a></li>
-      <li><a href="https://www.momo.vn/blog/giai-dap-su-dung-vi-tra-sau-tren-momo-co-mat-phi-khong-c116dt1867" target="_blank" rel="noopener">Các loại phí Ví Trả Sau (phí dịch vụ 33k)</a></li>
-      <li><a href="https://www.momo.vn/tin-tuc/thong-bao/tat-tan-tat-ve-chuyen-doi-tra-gop-du-no-vi-tra-sau-5766" target="_blank" rel="noopener">Chuyển đổi trả góp dư nợ</a></li>
-      <li><a href="https://www.momo.vn/blog/cham-thanh-toan-vi-tra-sau-khong-tra-tien-vi-tra-sau-co-bi-sao-khong-c116dt1136" target="_blank" rel="noopener">Trả chậm có bị nợ xấu không</a></li>
-    </ul>
-  </div>
-  </section>`;
+  </div></section>`;
 }
 function jarView(){
-  return `<section class="grid g2" style="margin-top:6px">${JARS.map(j=>{const b=jarBalance(j.id),p=Math.max(0,Math.min(1,b/j.goal));
-  return `<div class="card jar"><div class="row"><h2 style="font-size:18px">${j.name}</h2><span class="pill jar">Mục tiêu ${tr(j.goal)}</span></div>
+  return `<section class="grid g2" style="margin-top:6px">${JARS().map(j=>{const b=jarBalance(j.id),p=j.goal?Math.max(0,Math.min(1,b/j.goal)):0;
+  return `<div class="card jar"><div class="row"><h2 style="font-size:18px">${esc(j.name)}</h2>${j.goal?`<span class="pill jar">Mục tiêu ${tr(j.goal)}</span>`:''}</div>
     <div class="jar-row"><div class="jar-vis"><i style="height:${p*100}%"></i></div>
-    <div><div class="big" style="font-size:32px;color:var(--jar)">${vnd(b)}</div><div class="small muted">${Math.round(p*100)}% · còn ${tr(Math.max(0,j.goal-b))}</div></div></div>
-    <p class="note" style="margin:0">${j.why}</p>
+    <div><div class="big" style="font-size:32px;color:var(--jar)">${vnd(b)}</div>${j.goal?`<div class="small muted">${Math.round(p*100)}% · còn ${tr(Math.max(0,j.goal-b))}</div>`:''}</div></div>
+    ${j.why?`<p class="note" style="margin:0">${esc(j.why)}</p>`:''}
     <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-start">
       <input id="jin-${j.id}" inputmode="numeric" placeholder="Số tiền (vd 200 = 200k)" style="flex:1;min-width:150px;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg)">
       <button class="btn sm" data-jar="${j.id}" data-dir="1">+ Bỏ vào</button><button class="btn sm ghost" data-jar="${j.id}" data-dir="-1">Rút ra</button></div>
+    <div class="grid g2" style="gap:8px"><div class="field"><label class="small" for="jn-${j.id}">Tên hũ</label><input id="jn-${j.id}" data-jarname="${j.id}" value="${esc(j.name)}"></div>
+      <div class="field"><label class="small" for="jg-${j.id}">Mục tiêu</label><input id="jg-${j.id}" data-jargoal="${j.id}" inputmode="numeric" value="${(j.goal||0).toLocaleString('vi-VN')}"></div></div>
   </div>`}).join('')}
-  <div class="card"><div class="sec-title"><h2>Lộ trình</h2></div>
-    <ul class="clean small"><li>Checklist ngày 1 và 15 có ô “Bỏ hũ”. Tick là tiền tự cộng vào hũ.</li>
-    <li>Khẩn cấp: 1,25tr/tháng từ tháng 11. Tháng 1/2027 vượt 3tr, tháng 4/2027 đủ 6tr.</li>
-    <li>Tiền mạng: 250k/tháng × 12 tháng = 3tr, đủ đóng mạng năm 2027.</li>
-    <li>Hũ chỉ rút cho việc gấp thật sự (xe hư, ốm, điện tăng đột biến), không rút cho quà cáp.</li></ul>
-    ${S.jarlog.length?`<div class="label" style="margin-top:14px">Nạp/rút tay</div>${S.jarlog.slice().reverse().slice(0,8).map(l=>`<div class="row small" style="padding:6px 0;border-top:1px solid var(--line)"><span>${+l.d.slice(8)}/${+l.d.slice(5,7)} · ${JARS.find(j=>j.id===l.jar).name}</span><b style="color:${l.amt<0?'var(--bad)':'var(--jar)'}">${l.amt<0?'':'+'}${tr(l.amt)}</b></div>`).join('')}`:''}
+  <div class="card"><div class="sec-title"><h2>Cách dùng hũ</h2></div>
+    <ul class="clean small"><li>Thêm khoản “Bỏ hũ” trong Thu chi cố định. Tick trong checklist là tiền tự cộng vào hũ.</li>
+    <li>Nạp hoặc rút tay bằng ô số tiền ở từng hũ.</li>
+    <li>Hũ chỉ rút cho việc gấp thật sự, không rút cho chi tiêu thường ngày.</li></ul>
+    ${S.jarlog.length?`<div class="label" style="margin-top:14px">Nạp/rút tay</div>${S.jarlog.slice().reverse().slice(0,8).map(l=>`<div class="row small" style="padding:6px 0;border-top:1px solid var(--line)"><span>${+l.d.slice(8)}/${+l.d.slice(5,7)} · ${esc((JARS().find(j=>j.id===l.jar)||{name:'Hũ'}).name)}</span><b style="color:${l.amt<0?'var(--bad)':'var(--jar)'}">${l.amt<0?'':'+'}${tr(l.amt)}</b></div>`).join('')}`:''}
   </div></section>`;
 }
 function render(){
   MEMO={};
+  if(viewKey<st())viewKey=st();
   $('#mLabel').textContent=`Tháng ${+viewKey.slice(5)}/${viewKey.slice(0,4)}`;
-  $('#prevM').disabled=viewKey<=START;
+  $('#prevM').disabled=viewKey<=st();
   document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
-  $('#view').innerHTML=({home,tx:txView,plan:planView,jar:jarView})[tab]();
+  $('#view').innerHTML=({home,tx:txView,fixed:fixedView,plan:planView,jar:jarView})[tab]();
 }
 
-// ---------- add sheet ----------
-function parseAmt(v){let n=+String(v).replace(/[^\d]/g,'');if(n>0&&n<1000)n*=1000;return n}
-function openSheet(){
+// ---------- sheet: ghi / sửa thu chi ----------
+function closeSheet(){$('#sheetHost').innerHTML=''}
+function openSheet(edit){
   const k=viewKey;
-  const defD=todayKey===k?todayStr:(k>todayKey?k+'-01':k+'-'+pad(dim(k)));
-  let cat='an',src='cash';
+  const defD=edit?edit.d:(todayKey===k?todayStr:(k>todayKey?k+'-01':k+'-'+pad(dim(k))));
+  let type=edit?(edit.type==='in'?'in':'out'):'out',cat=edit?edit.cat:'an',src=edit?(edit.src||'cash'):'cash';
+  const catChips=()=>(type==='in'?INCATS:CATS).map(c=>`<button type="button" class="chip" data-cat="${c.id}" style="color:var(${type==='in'?'--good':c.v})" aria-pressed="${c.id===cat}"><span style="color:var(--ink)">${c.name}</span></button>`).join('');
   $('#sheetHost').innerHTML=`<div class="sheet-bg" id="sbg"><form class="sheet" id="addForm" autocomplete="off">
-    <div class="row"><h2 style="font-size:19px">Ghi chi tiêu</h2><button type="button" class="btn sm ghost" id="closeS">Đóng</button></div>
-    <div class="field"><input class="amt-in" id="amt" inputmode="numeric" placeholder="0" aria-label="Số tiền"><span class="small muted" id="amtHint">Gõ 50 = 50.000đ</span></div>
+    <div class="row"><h2 style="font-size:19px">${edit?'Sửa giao dịch':'Ghi thu chi'}</h2><button type="button" class="btn sm ghost" id="closeS">Đóng</button></div>
+    <div class="seg" id="typeSeg"><button type="button" class="out" data-type="out" aria-pressed="${type==='out'}">Chi ra</button><button type="button" class="in" data-type="in" aria-pressed="${type==='in'}">Thu vào</button></div>
+    <div class="field"><input class="amt-in" id="amt" inputmode="numeric" placeholder="0" aria-label="Số tiền" value="${edit?edit.amt.toLocaleString('vi-VN'):''}"><span class="small muted" id="amtHint">Gõ 50 = 50.000đ</span></div>
     <div class="chips">${[20,50,100,200,500].map(v=>`<button type="button" class="chip" data-q="${v}">+${v}k</button>`).join('')}</div>
-    <div class="field"><span class="label">Mục</span><div class="chips" id="catChips">${CATS.map(c=>`<button type="button" class="chip" data-cat="${c.id}" style="color:var(${c.v})" aria-pressed="${c.id===cat}"><span style="color:var(--ink)">${c.name}</span></button>`).join('')}</div></div>
-    <div class="field"><span class="label">Trả bằng</span><div class="chips" id="srcChips"><button type="button" class="chip" data-src="cash" aria-pressed="true">Tiền thịt (tiền mặt/bank)</button><button type="button" class="chip" data-src="momo" style="color:var(--momo)" aria-pressed="false"><span style="color:var(--ink)">Đòn bẩy (MoMo)</span></button></div></div>
+    <div class="field"><span class="label">Mục</span><div class="chips" id="catChips">${catChips()}</div></div>
+    <div class="field" id="srcField"><span class="label">Trả bằng</span><div class="chips" id="srcChips"><button type="button" class="chip" data-src="cash" aria-pressed="${src!=='momo'}">Tiền thịt (tiền mặt/bank)</button><button type="button" class="chip" data-src="momo" style="color:var(--momo)" aria-pressed="${src==='momo'}"><span style="color:var(--ink)">Quẹt Ví Trả Sau</span></button></div></div>
     <div id="momoWarn"></div>
-    <div class="grid g2" style="gap:10px"><div class="field"><label class="label" for="note">Ghi chú</label><input id="note" placeholder="vd: trà sữa với Vy"></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label class="label" for="note">Ghi chú</label><input id="note" placeholder="${type==='in'?'vd: hoa hồng':'vd: trà sữa'}" value="${edit?esc(edit.note||''):''}"></div>
     <div class="field"><label class="label" for="date">Ngày</label><input id="date" type="date" value="${defD}"></div></div>
-    <button class="btn" type="submit" style="background:var(--momo);color:#fff">Lưu khoản chi</button>
+    <button class="btn" type="submit" id="saveBtn">Lưu</button>
+    ${edit?'<button type="button" class="btn ghost" id="delTx" style="color:var(--bad)">Xoá giao dịch này</button>':''}
   </form></div>`;
-  const amt=$('#amt');setTimeout(()=>amt.focus(),50);
+  const amt=$('#amt');if(!edit)setTimeout(()=>amt.focus(),50);
+  const paint=()=>{$('#srcField').hidden=type==='in';const sb=$('#saveBtn');sb.style.background=type==='in'?'var(--good)':'var(--momo)';sb.style.color='#fff';sb.textContent=edit?'Lưu thay đổi':(type==='in'?'Lưu khoản thu':'Lưu khoản chi');upd()};
   const upd=()=>{const n=parseAmt(amt.value);$('#amtHint').textContent=n?'= '+vnd(n):'Gõ 50 = 50.000đ';
-    const s=monthStats(k),left=MOMO_CAP-s.momoUse;
-    $('#momoWarn').innerHTML=src==='momo'?(n>left?`<div class="warnbox">Vượt trần MoMo 3tr tháng này (còn ${tr(Math.max(0,left))}). Nên trả bằng tiền mặt.</div>`:`<div class="small" style="color:var(--momo)">MoMo còn quẹt được ${tr(left-n)} sau khoản này.</div>`):'';};
+    const cap=S.cfg.cap;
+    if(type==='out'&&src==='momo'&&cap){const s=monthStats(k),left=cap-s.momoUse+(edit&&edit.src==='momo'&&edit.type!=='in'?edit.amt:0);
+      $('#momoWarn').innerHTML=n>left?`<div class="warnbox">Vượt trần ví tháng này (còn ${tr(Math.max(0,left))}). Nên trả bằng tiền thịt.</div>`:`<div class="small" style="color:var(--momo)">Ví còn quẹt được ${tr(left-n)} sau khoản này.</div>`}
+    else $('#momoWarn').innerHTML='';};
   amt.addEventListener('input',upd);
   $('#sheetHost').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{amt.value=((parseAmt(amt.value)||0)+ +b.dataset.q*1000).toLocaleString('vi-VN');upd()});
+  $('#typeSeg').onclick=e=>{const b=e.target.closest('[data-type]');if(!b||b.dataset.type===type)return;type=b.dataset.type;cat=type==='in'?'thuong':'an';
+    $('#typeSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#catChips').innerHTML=catChips();paint()};
   $('#catChips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;cat=b.dataset.cat;$('#catChips').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b))};
   $('#srcChips').onclick=e=>{const b=e.target.closest('[data-src]');if(!b)return;src=b.dataset.src;$('#srcChips').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));upd()};
-  const close=()=>{$('#sheetHost').innerHTML=''};
-  $('#closeS').onclick=close;$('#sbg').onclick=e=>{if(e.target.id==='sbg')close()};
+  $('#closeS').onclick=closeSheet;$('#sbg').onclick=e=>{if(e.target.id==='sbg')closeSheet()};
+  if(edit)$('#delTx').onclick=e=>{const b=e.currentTarget;if(!b.dataset.armed){b.dataset.armed='1';b.textContent='Bấm lần nữa để xoá';return}
+    const mk=edit.d.slice(0,7),m=month(mk);m.tx=m.tx.filter(t=>t.id!==edit.id);saveMonth(mk,m);closeSheet();render();toast('Đã xoá')};
   $('#addForm').onsubmit=e=>{e.preventDefault();const n=parseAmt(amt.value);if(!n){$('#amtHint').textContent='Nhập số tiền trước nhé';amt.focus();return}
     const d=$('#date').value||defD,mk=d.slice(0,7);
-    if(mk<START){$('#amtHint').textContent='Web bắt đầu theo dõi từ 1/10/2026';return}
-    const m=month(mk);m.tx.push({id:uid(),d,amt:n,cat,src,note:$('#note').value.trim().slice(0,80)});saveMonth(mk,m);
-    close();viewKey=mk;render();toast('Đã lưu −'+vnd(n));};
+    if(mk<st()){$('#amtHint').textContent=`App bắt đầu theo dõi từ ${mName(st())}`;return}
+    const t={id:edit?edit.id:uid(),d,amt:n,cat,type,note:$('#note').value.trim().slice(0,80)};if(type==='out')t.src=src;
+    if(edit){const om=edit.d.slice(0,7),o=month(om);o.tx=o.tx.filter(x=>x.id!==edit.id);if(om!==mk)saveMonth(om,o);else{o.tx.push(t);saveMonth(mk,o);closeSheet();viewKey=mk;render();toast('Đã lưu thay đổi');return}}
+    const m=month(mk);m.tx.push(t);saveMonth(mk,m);
+    closeSheet();viewKey=mk;render();toast(edit?'Đã lưu thay đổi':(type==='in'?'Đã ghi +':'Đã ghi −')+vnd(n));};
+  paint();
+}
+
+// ---------- sheet: khoản cố định ----------
+function openRecSheet(id){
+  const r=id==='new'?null:S.rec.find(x=>x.id===id);
+  let kind=r?r.kind:'in',mode=r?(r.mode||'first'):'first';
+  const jarOpts=JARS().map(j=>`<option value="${j.id}" ${r&&r.jar===j.id?'selected':''}>${esc(j.name)}</option>`).join('');
+  $('#sheetHost').innerHTML=`<div class="sheet-bg" id="sbg"><form class="sheet" id="recForm" autocomplete="off">
+    <div class="row"><h2 style="font-size:19px">${r?'Sửa khoản cố định':'Thêm khoản cố định'}</h2><button type="button" class="btn sm ghost" id="closeS">Đóng</button></div>
+    <div class="field"><span class="label">Loại</span><div class="chips" id="kindChips">${Object.entries(KINDS).map(([k,n])=>`<button type="button" class="chip" data-kind="${k}" aria-pressed="${k===kind}">${n}</button>`).join('')}</div>
+      <span class="small muted" id="kindHint"></span></div>
+    <div class="field"><label class="label" for="rLabel">Tên khoản</label><input id="rLabel" value="${r?esc(r.label):''}" placeholder="vd: Lương, Tiền nhà, Trả góp điện thoại"></div>
+    <div class="field" id="modeField"><span class="label">Cách trả hoá đơn ví</span><div class="chips" id="modeChips">
+      <button type="button" class="chip" data-mode="first" aria-pressed="${mode==='first'}">Trả một phần (tối đa số dưới)</button>
+      <button type="button" class="chip" data-mode="rest" aria-pressed="${mode==='rest'}">Trả hết phần còn lại</button></div></div>
+    <div class="field" id="amtField"><label class="label" for="rAmt" id="rAmtLabel">Số tiền mỗi tháng</label><input class="amt-in" id="rAmt" inputmode="numeric" value="${r&&r.amt?r.amt.toLocaleString('vi-VN'):''}" placeholder="0"><span class="small muted" id="rAmtHint">Gõ 500 = 500.000đ</span></div>
+    <div class="field" id="jarField"><label class="label" for="rJar">Bỏ vào hũ</label><select id="rJar">${jarOpts}</select></div>
+    <div class="grid g2" style="gap:10px">
+      <div class="field"><label class="label" for="rDay">Ngày trong tháng</label><input id="rDay" type="number" min="1" max="31" inputmode="numeric" value="${r?r.day:1}"></div>
+      ${r?'':`<div class="field"><label class="label" for="rFrom">Bắt đầu từ tháng</label><input id="rFrom" type="month" value="${viewKey}"></div>`}
+    </div>
+    ${r?'<p class="note" style="margin:0">Sửa ở đây áp dụng cho mọi tháng chưa tick. Chỉ muốn đổi riêng một tháng thì bấm vào số tiền trong checklist tháng đó.</p>':''}
+    <button class="btn" type="submit">${r?'Lưu thay đổi':'Thêm khoản'}</button>
+    ${r?`<button type="button" class="btn ghost" id="stopRec" style="color:var(--bad)">Ngừng khoản này từ ${mName(viewKey)}</button>`:''}
+  </form></div>`;
+  const hints={in:'Tiền vào tiền thịt, vd lương, trợ cấp.',fixed:'Trừ thẳng vào tiền thịt, vd tiền nhà, nước, 4G.',lev:'Trả bằng Ví Trả Sau: không trừ tiền thịt, cộng vào nợ ví, tháng sau trả.',momo:'Khoản trả hoá đơn ví. Số tiền tự tính theo hoá đơn.',jar:'Chuyển tiền thịt vào hũ để dành.'};
+  const paint=()=>{$('#modeField').hidden=kind!=='momo';$('#jarField').hidden=kind!=='jar';$('#amtField').hidden=kind==='momo'&&mode==='rest';
+    $('#rAmtLabel').textContent=kind==='momo'?'Trả tối đa':'Số tiền mỗi tháng';$('#kindHint').textContent=hints[kind]};
+  $('#kindChips').onclick=e=>{const b=e.target.closest('[data-kind]');if(!b)return;kind=b.dataset.kind;$('#kindChips').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));paint()};
+  $('#modeChips').onclick=e=>{const b=e.target.closest('[data-mode]');if(!b)return;mode=b.dataset.mode;$('#modeChips').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));paint()};
+  $('#rAmt').addEventListener('input',()=>{const n=parseAmt($('#rAmt').value);$('#rAmtHint').textContent=n?'= '+vnd(n):'Gõ 500 = 500.000đ'});
+  $('#closeS').onclick=closeSheet;$('#sbg').onclick=e=>{if(e.target.id==='sbg')closeSheet()};
+  if(r)$('#stopRec').onclick=e=>{const b=e.currentTarget;if(!b.dataset.armed){b.dataset.armed='1';b.textContent='Bấm lần nữa để ngừng (các tháng trước vẫn giữ)';return}
+    const until=addM(viewKey,-1);
+    if((r.from||st())>until)S.rec=S.rec.filter(x=>x.id!==r.id);else r.until=until;
+    saveSettings();closeSheet();render();toast('Đã ngừng khoản này')};
+  $('#recForm').onsubmit=e=>{e.preventDefault();
+    const label=$('#rLabel').value.trim().slice(0,60)||KINDS[kind];
+    const n=parseAmt($('#rAmt').value);
+    if(!(kind==='momo'&&mode==='rest')&&!n){$('#rAmtHint').textContent='Nhập số tiền trước nhé';$('#rAmt').focus();return}
+    const day=Math.min(31,Math.max(1,parseInt($('#rDay').value,10)||1));
+    const obj=r||{id:uid()};
+    Object.assign(obj,{kind,label,amt:kind==='momo'&&mode==='rest'?0:n,day});
+    if(kind==='momo')obj.mode=mode;else delete obj.mode;
+    if(kind==='jar')obj.jar=$('#rJar').value;else delete obj.jar;
+    if(!r){const f=$('#rFrom').value;if(f&&f>st())obj.from=f;S.rec.push(obj)}
+    saveSettings();closeSheet();render();toast(r?'Đã lưu thay đổi':'Đã thêm khoản cố định');};
+  paint();
 }
 function toast(msg){$('#toastHost').innerHTML=`<div class="toast" role="status">${esc(msg)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toastHost').innerHTML='',2200)}
 
-// ---------- events ----------
+// ---------- sự kiện ----------
 document.querySelector('.tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;try{history.replaceState(null,'','#'+tab)}catch(_){}render()};
-$('#prevM').onclick=()=>{if(viewKey>START){viewKey=addM(viewKey,-1);render()}};
+$('#prevM').onclick=()=>{if(viewKey>st()){viewKey=addM(viewKey,-1);render()}};
 $('#nextM').onclick=()=>{viewKey=addM(viewKey,1);render()};
-$('#fab').onclick=openSheet;
+$('#fab').onclick=()=>openSheet(null);
 $('#view').addEventListener('change',e=>{
   const c=e.target.closest('[data-chk]');
   if(c){const k=c.dataset.k,m=month(k),id=c.dataset.chk;MEMO={};
-    const it=[...plan(k).d1,...plan(k).d15].find(i=>i.id===id);
-    if(c.checked){m.checks[id]=true;if(m.amts[id]==null&&it){m.amts[id]=it.amt;m.auto[id]=true}} // chốt số tiền lúc tick, sau này không bị tính lại
+    const it=plan(k).items.find(i=>i.id===id);
+    if(c.checked){m.checks[id]=true;if(m.amts[id]==null&&it){m.amts[id]=it.amt;m.auto[id]=true}} // chốt số tiền lúc tick
     else{delete m.checks[id];if(m.auto[id]){delete m.amts[id];delete m.auto[id]}}
     saveMonth(k,m);render();return}
   const ae=e.target.closest('[data-amtedit]');
-  if(ae){const k=ae.dataset.k,m=month(k),n=parseAmt(ae.value);if(n){m.amts[ae.dataset.amtedit]=n;delete m.auto[ae.dataset.amtedit];saveMonth(k,m);toast('Đã sửa thành '+vnd(n))}ae.remove();render();return}
+  if(ae){const k=ae.dataset.k,m=month(k),raw=ae.value.replace(/[^\d]/g,''),n=parseAmt(raw);
+    if(raw!==''){m.amts[ae.dataset.amtedit]=n;delete m.auto[ae.dataset.amtedit];saveMonth(k,m);toast('Đã sửa thành '+vnd(n))}ae.remove();render();return}
   const b=e.target.closest('[data-budget]');
-  if(b){const n=+b.value.replace(/[^\d]/g,'');S.budgets[b.dataset.budget]=n;saveBudgets();render()}
+  if(b){S.budgets[b.dataset.budget]=+b.value.replace(/[^\d]/g,'');saveSettings();render();return}
+  const cf=e.target.closest('[data-cfg]');
+  if(cf){const key=cf.dataset.cfg;
+    if(key==='start'){if(/^\d{4}-\d{2}$/.test(cf.value))S.cfg.start=cf.value}
+    else if(key==='due')S.cfg.due=Math.min(28,Math.max(1,parseInt(cf.value,10)||15));
+    else S.cfg[key]=+cf.value.replace(/[^\d]/g,'');
+    saveSettings();render();toast('Đã lưu cài đặt');return}
+  const jn=e.target.closest('[data-jarname]'),jg=e.target.closest('[data-jargoal]');
+  if(jn||jg){const j=JARS().find(x=>x.id===(jn||jg).dataset[jn?'jarname':'jargoal']);if(j){if(jn)j.name=jn.value.trim().slice(0,40)||j.name;else j.goal=+jg.value.replace(/[^\d]/g,'')}
+    saveSettings();render();return}
 });
-const dump=()=>JSON.stringify({app:'vi-cua-son',v:1,savedAt:new Date().toISOString(),budgets:S.budgets,months:S.months,jarlog:S.jarlog});
+const dump=()=>JSON.stringify({app:'vi-cua-son',v:2,savedAt:new Date().toISOString(),cfg:S.cfg,budgets:S.budgets,rec:S.rec,months:S.months,jarlog:S.jarlog});
 function restore(txt,btn){
   let d;try{d=JSON.parse(txt)}catch(_){toast('Dữ liệu không đọc được, kiểm tra lại đoạn đã dán');return}
-  if(!d||typeof d.months!=='object'){toast('Không phải file sao lưu của Ví Của Sơn');return}
+  if(!d||typeof d.months!=='object'){toast('Không phải file sao lưu của app này');return}
   if(btn&&!btn.dataset.armed){btn.dataset.armed='1';const t=btn.textContent;btn.textContent='Bấm lần nữa để ghi đè dữ liệu hiện tại';setTimeout(()=>{if(btn.isConnected){delete btn.dataset.armed;btn.textContent=t}},4000);return}
-  S.months=d.months||{};S.jarlog=d.jarlog||[];if(d.budgets)S.budgets={...S.budgets,...d.budgets};MEMO={};
-  Object.entries(S.months).forEach(([k,m])=>persist('months/'+k,m));saveJars();saveBudgets();render();toast('Đã khôi phục dữ liệu');
+  // bản sao lưu cũ (v1) chưa có cfg/rec: dùng mặc định của bản cá nhân
+  if(!d.rec&&!d.cfg&&PERSONAL){const P=defaults();d.rec=P.rec;d.cfg=P.cfg}
+  S.months=d.months||{};S.jarlog=d.jarlog||[];applySettings(d);MEMO={};
+  Object.entries(S.months).forEach(([k,m])=>persist('months/'+k,m));saveJars();saveSettings();viewKey=todayKey;render();toast('Đã khôi phục dữ liệu');
 }
 $('#view').addEventListener('click',e=>{
+  const g=e.target.closest('[data-goto]');if(g){tab=g.dataset.goto;render();return}
+  const rc=e.target.closest('[data-rec]');if(rc){openRecSheet(rc.dataset.rec);return}
+  const op=e.target.closest('[data-open]');if(op){const t=month(viewKey).tx.find(x=>x.id===op.dataset.open);if(t)openSheet(t);return}
   const bk=e.target.closest('[data-bk]');
   if(bk){const t=bk.dataset.bk;
-    if(t==='file'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([dump()],{type:'application/json'}));a.download=`vi-cua-son-${todayStr}.json`;document.body.appendChild(a);a.click();a.remove();toast('Đã tải file sao lưu')}
+    if(t==='file'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([dump()],{type:'application/json'}));a.download=`vi-sao-luu-${todayStr}.json`;document.body.appendChild(a);a.click();a.remove();toast('Đã tải file sao lưu')}
     if(t==='copy'){const txt=dump();(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('Đã copy, dán vào Ghi chú để giữ'),()=>{const ta=$('#bkText');ta.value=txt;ta.select();toast('Đã chọn sẵn, bấm Copy')})}
     if(t==='paste')restore($('#bkText').value.trim(),bk);
     return}
@@ -569,33 +666,35 @@ $('#view').addEventListener('click',e=>{
     inp.value=(+ed.dataset.v).toLocaleString('vi-VN');inp.dataset.amtedit=ed.dataset.edit;inp.dataset.k=ed.dataset.k;ed.replaceWith(inp);inp.focus();inp.select();
     inp.addEventListener('blur',()=>{if(inp.isConnected)render()});
     inp.addEventListener('keydown',ev=>{if(ev.key==='Enter')inp.blur()});return}
-  const d=e.target.closest('[data-del]');
-  if(d){if(d.dataset.armed){const m=month(viewKey);m.tx=m.tx.filter(t=>t.id!==d.dataset.del);saveMonth(viewKey,m);render();toast('Đã xoá')}
-    else{d.dataset.armed='1';d.textContent='Chắc chưa?';d.style.color='var(--bad)';setTimeout(()=>{if(d.isConnected){delete d.dataset.armed;d.textContent='Xoá';d.style.color=''}},3000)}return}
   const j=e.target.closest('[data-jar]');
   if(j){const inp=$('#jin-'+j.dataset.jar),n=parseAmt(inp.value);if(!n){inp.focus();return}
     S.jarlog.push({id:uid(),d:todayStr,jar:j.dataset.jar,amt:n*+j.dataset.dir});saveJars();render();toast(+j.dataset.dir>0?'Đã bỏ hũ +'+tr(n):'Đã rút '+tr(n))}
 });
+$('#view').addEventListener('keydown',e=>{if(e.key==='Enter'){const op=e.target.closest('[data-open]');if(op)op.click()}});
 
-// ---------- boot ----------
+// ---------- khởi động ----------
 document.addEventListener('change',e=>{if(e.target.id==='bkFile'&&e.target.files[0]){e.target.files[0].text().then(t=>restore(t,null));e.target.value=''}});
 try{if('serviceWorker' in navigator&&location.hostname.endsWith('github.io'))navigator.serviceWorker.register('sw.js')}catch(_){}
-lsLoad();render();
+lsLoad();
+if(!hasSettings)lsSave(); // chốt tháng bắt đầu lần đầu mở app
+viewKey=todayKey<st()?st():todayKey;
+render();
 $('#syncState').textContent='Lưu trên máy này';
 (async()=>{
   try{db=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){db=null}
-  if(!db){$('#syncState').textContent='Lưu trên trình duyệt này';return}
+  if(!db){$('#syncState').textContent='Lưu trên máy này';return}
   $('#syncState').textContent='Đồng bộ mọi thiết bị';
   const err=()=>{$('#syncState').textContent='Mất kết nối, đang lưu tạm trên máy'};
   db.collection('months').onSnapshot(snap=>{
     if(snap.metadata.hasPendingWrites)return;
     const next={};snap.docs.forEach(d=>next[d.id]=d.data());
-    // giữ dữ liệu cũ trên máy nếu máy chủ trống (lần đầu)
     if(snap.empty&&Object.keys(S.months).length){Object.entries(S.months).forEach(([k,m])=>persist('months/'+k,m));return}
     S.months=next;lsSave();render();
   },err);
   db.doc('app/jars').onSnapshot(d=>{if(d.metadata.hasPendingWrites)return;if(d.exists){S.jarlog=[...(d.data().log||[])];lsSave();render()}else if(S.jarlog.length)saveJars()},err);
-  db.doc('app/settings').onSnapshot(d=>{if(d.metadata.hasPendingWrites)return;if(d.exists){S.budgets={...S.budgets,...(d.data().budgets||{})};lsSave();render()}},err);
+  db.doc('app/settings').onSnapshot(d=>{if(d.metadata.hasPendingWrites)return;
+    if(d.exists){const x=d.data();applySettings({budgets:x.budgets,rec:x.rec,cfg:x.cfg});lsSave();render();if(!x.rec)saveSettings()}
+    else saveSettings()},err);
 })();
 })();
 </script>
