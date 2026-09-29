@@ -159,6 +159,12 @@ ul.clean{margin:0;padding-left:18px;display:grid;gap:6px}
 .seg button{border:0;border-radius:10px;padding:10px;font-weight:700;background:transparent;color:var(--muted)}
 .seg button[aria-pressed="true"].out{background:var(--momo);color:#fff}
 .seg button[aria-pressed="true"].in{background:var(--good);color:#fff}
+.recedit{border:0;background:var(--accent-bg);color:var(--accent);width:30px;height:30px;border-radius:9px;font-size:14px;flex:none}
+.recedit:hover{background:var(--accent);color:var(--on-accent)}
+.addday{margin-top:10px;width:100%;border-style:dashed!important}
+.sec-title .btn{white-space:nowrap}
+.wset summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--momo)}
+.wset input{border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);width:100%}
 .empty{border:2px dashed var(--line);border-radius:18px;padding:22px;text-align:center;display:grid;gap:10px;justify-items:center}
 </style>
 
@@ -323,14 +329,14 @@ function catBar(c,spent,budget){
     <div class="row small"><span class="pill ${t}" style="padding:2px 9px">${left<0?'Lố '+tr(-left):'Còn '+tr(left)}</span><span class="muted">${budget?Math.round(p*100)+'%':''}</span></div>
   </div>`;
 }
-function chkItem(i,m,k){
+function chkItem(i,m,k,o){o=o||{};
   const done=!!m.checks[i.id];
   const cls={in:'in',fixed:'out',momo:'mo',jar:'jr',lev:'mo'}[i.kind];
   const sign=i.kind==='in'?'+':i.kind==='lev'?'+nợ ':'−';
   const edited=m.amts&&m.amts[i.id]!=null&&!(m.auto&&m.auto[i.id]);
   const extra=i.kind==='lev'?' (trả bằng ví, cộng vào nợ ví)':'';
   return `<label class="chk ${done?'done':''} ${i.hot&&!done?'hot':''}"><input type="checkbox" data-chk="${i.id}" data-k="${k}" ${done?'checked':''}>
-    <span class="t">${esc(i.label)}${extra}${i.sub?`<br><span class="small muted">${i.sub}</span>`:''}</span><button type="button" class="amt amtbtn ${cls}" data-edit="${i.id}" data-k="${k}" data-v="${ia(i,m)}" title="Bấm để sửa số tiền thực tế tháng này">${sign}${tr(ia(i,m))}${edited?' ✎':''}</button></label>`;
+    <span class="t">${esc(i.label)}${extra}${o.kind?`<br><span class="kpill k-${i.kind}">${KINDS[i.kind]}${i.kind==='jar'?' · '+esc((JARS().find(j=>j.id===i.jar)||{}).name||''):''}${i.kind==='momo'?(i.mode==='rest'?' · trả phần còn lại':' · tối đa '+tr((S.rec.find(r=>r.id===i.id)||i).amt)):''}</span>`:''}${i.sub?`<br><span class="small muted">${i.sub}</span>`:''}</span><button type="button" class="amt amtbtn ${cls}" data-edit="${i.id}" data-k="${k}" data-v="${ia(i,m)}" title="Bấm để sửa số tiền thực tế tháng này">${sign}${tr(ia(i,m))}${edited?' ✎':''}</button>${o.edit?`<button type="button" class="recedit" data-rec="${i.id}" aria-label="Sửa khoản ${esc(i.label)}" title="Sửa khoản cố định">✎</button>`:''}</label>`;
 }
 function dayCards(k,s){
   const p=s.p,m=s.m;
@@ -374,6 +380,13 @@ function home(){
         <div class="small muted">Hạn chót ${Math.min(S.cfg.due,D)}/${+k.slice(5)}. Trả đủ trước hạn = 0đ phạt.</div>
         <div class="small" style="margin-top:4px">Còn phải trả: <b style="color:${dueLeft>0?'var(--momo)':'var(--good)'}">${tr(dueLeft)}</b></div></div>
       ${cap&&capLeft<0?'<div class="warnbox">Đã vượt trần. Phần lố sẽ ăn vào tiền tháng sau.</div>':''}
+      <details class="wset"><summary>Chỉnh thông tin ví (phí, ngày hạn, trần)</summary>
+        <div class="grid g2" style="gap:8px;margin-top:8px">
+          <div class="field"><label class="small" for="cf-fee">Phí dịch vụ/tháng</label><input id="cf-fee" data-cfg="fee" inputmode="numeric" value="${S.cfg.fee.toLocaleString('vi-VN')}"></div>
+          <div class="field"><label class="small" for="cf-due">Ngày hạn trả</label><input id="cf-due" data-cfg="due" inputmode="numeric" value="${S.cfg.due}"></div>
+          <div class="field"><label class="small" for="cf-cap">Trần tự đặt (0 = không)</label><input id="cf-cap" data-cfg="cap" inputmode="numeric" value="${S.cfg.cap.toLocaleString('vi-VN')}"></div>
+          <div class="field"><label class="small" for="cf-openDebt">Hoá đơn ví ${mName(st())}</label><input id="cf-openDebt" data-cfg="openDebt" inputmode="numeric" value="${S.cfg.openDebt.toLocaleString('vi-VN')}"></div>
+        </div></details>
       ${lateBefore>0?`<div class="warnbox">Hoá đơn ${mName(addM(k,-2))} còn thiếu ${vnd(lateBefore)}, đã quá hạn và đang bị phạt. Trả ngay phần này trước.</div>`:''}
       ${dueLeft>0&&isCur&&d>=S.cfg.due-3&&todayStr<=dueStr(k)?`<div class="warnbox">Còn ${vnd(dueLeft)} phải trả trước hết ngày ${S.cfg.due}/${+k.slice(5)}. Trễ 1–4 ngày phạt 5,25%, quá 10 ngày bị báo CIC.</div>`:''}
       ${dueLeft>0&&todayStr>dueStr(k)?`<div class="warnbox">Hoá đơn ${mName(pk)} còn thiếu ${vnd(dueLeft)}, đã quá hạn. Trả ngay rồi bấm vào số tiền ở ô trả ví sửa thành số đã trả thật.</div>`:''}
@@ -434,33 +447,22 @@ function fixedView(){
   const k=viewKey,p=plan(k),m=month(k);
   const days=[...new Set(p.items.map(i=>i.day))];
   const tot=kind=>p.items.filter(i=>i.kind===kind).reduce((a,i)=>a+i.amt,0);
-  const recRow=i=>{const r=S.rec.find(x=>x.id===i.id)||i;
-    const amtTxt=i.kind==='momo'?(r.mode==='rest'?'Phần còn lại':'Tối đa '+tr(r.amt)):tr(r.amt);
-    return `<div class="rec"><div><div style="font-weight:600">${esc(r.label)}</div><span class="kpill k-${i.kind}">${KINDS[i.kind]}${i.kind==='jar'?' · '+esc((JARS().find(j=>j.id===i.jar)||{}).name||''):''}</span>${r.from&&r.from>st()?` <span class="small muted">từ ${mName(r.from)}</span>`:''}</div>
-      <b class="${i.kind==='in'?'':''}" style="white-space:nowrap;color:var(${i.kind==='in'?'--good':i.kind==='jar'?'--jar':i.kind==='fixed'?'--ink':'--momo'})">${i.kind==='in'?'+':i.kind==='lev'?'+nợ ':'−'}${amtTxt}</b>
-      <button class="btn sm ghost" data-rec="${i.id}">Sửa</button></div>`};
+  const cards=days.map(day=>{const its=p.items.filter(i=>i.day===day),inc=its.filter(i=>i.kind==='in').reduce((a,i)=>a+ia(i,m),0),out=its.filter(i=>i.kind==='fixed'||i.kind==='momo'||i.kind==='jar').reduce((a,i)=>a+ia(i,m),0);
+    return `<div class="card"><div class="dayhead"><div class="daynum">${day}</div><div><h3 style="font-size:16px">Ngày ${day}</h3>
+      <div class="small muted">${inc?`<b style="color:var(--good)">+${tr(inc)}</b> vào`:''}${inc&&out?' · ':''}${out?`<b style="color:var(--ink)">−${tr(out)}</b> ra`:''}</div></div></div>
+      ${its.map(i=>chkItem(i,m,k,{edit:true,kind:true})).join('')}
+      <button class="btn sm ghost addday" data-rec="new" data-day="${day}">+ Thêm khoản ngày ${day}</button></div>`}).join('');
   return `<section class="grid" style="margin-top:6px">
   <div class="card">
-    <div class="sec-title"><h2>Thu chi cố định hằng tháng</h2><button class="btn sm" data-rec="new">+ Thêm khoản</button></div>
-    <p class="note" style="margin-top:0">Những khoản lặp lại mỗi tháng: lương, tiền nhà, điện nước, trả góp, bỏ hũ… App tự đưa vào checklist từng tháng. Đang xem ${mName(k)}.</p>
-    ${days.length?days.map(d=>`<div style="margin-top:8px"><div class="label">Ngày ${d}</div>${p.items.filter(i=>i.day===d).map(recRow).join('')}</div>`).join(''):'<div class="empty"><b>Chưa có khoản nào</b><span class="small muted">Bắt đầu bằng khoản lương hoặc tiền trợ cấp hằng tháng.</span></div>'}
+    <div class="sec-title"><h2>Thu chi cố định · ${mName(k)}</h2><button class="btn sm" data-rec="new">+ Thêm khoản</button></div>
+    <p class="note" style="margin:0">Các khoản lặp lại mỗi tháng. Tick khi đã làm xong, bấm số tiền để sửa riêng tháng này, bấm ✎ để sửa hẳn khoản đó.</p>
   </div>
+  ${days.length?`<div class="grid g2">${cards}</div>`:'<div class="card empty"><b>Chưa có khoản nào</b><span class="small muted">Bắt đầu bằng khoản lương hoặc tiền trợ cấp hằng tháng.</span><button class="btn sm" data-rec="new">+ Thêm khoản đầu tiên</button></div>'}
   <div class="card">
-    <div class="sec-title"><h2>Mỗi tháng ${mName(k)} tiền đi đâu</h2></div>
-    <div class="flow">${line('Thu cố định',p.inP)}${p.extraIn?line('Thu thêm (đã ghi)',p.extraIn):''}${line('Chi cố định bằng tiền thịt',-p.fixP)}${line('Trả hoá đơn ví (phần tính vào tháng này)',-p.billB)}${line('Bỏ hũ',-p.jarP)}</div>
+    <div class="sec-title"><h2>Tiền đi đâu trong ${mName(k)}</h2></div>
+    <div class="flow">${line('Thu cố định',p.inP)}${p.extraIn?line('Thu thêm (đã ghi)',p.extraIn):''}${line('Chi cố định bằng tiền thịt',-p.fixP)}${p.billB?line('Trả hoá đơn ví (phần tính vào tháng này)',-p.billB):''}${line('Bỏ hũ',-p.jarP)}</div>
     <div class="row" style="margin-top:10px"><b>Còn lại để chi tiêu</b><b style="font-size:20px;color:var(${p.spend<0?'--bad':'--good'})">${vnd(p.spend)}</b></div>
-    ${tot('lev')?`<p class="note">Các khoản “Trả bằng Ví Trả Sau” (${tr(tot('lev'))}) không trừ tiền thịt tháng này. Chúng vào hoá đơn ví và được trả tháng sau.</p>`:''}
-  </div>
-  <div class="card">
-    <div class="sec-title"><h2>Cài đặt Ví Trả Sau</h2></div>
-    <div class="grid g2" style="gap:10px">
-      <div class="field"><label class="small" for="cf-openDebt" style="font-weight:600">Hoá đơn ví phải trả trong ${mName(st())}</label><input id="cf-openDebt" data-cfg="openDebt" inputmode="numeric" value="${S.cfg.openDebt.toLocaleString('vi-VN')}"></div>
-      <div class="field"><label class="small" for="cf-fee" style="font-weight:600">Phí dịch vụ mỗi tháng có dùng ví</label><input id="cf-fee" data-cfg="fee" inputmode="numeric" value="${S.cfg.fee.toLocaleString('vi-VN')}"></div>
-      <div class="field"><label class="small" for="cf-due" style="font-weight:600">Ngày hạn thanh toán</label><input id="cf-due" data-cfg="due" inputmode="numeric" value="${S.cfg.due}"></div>
-      <div class="field"><label class="small" for="cf-cap" style="font-weight:600">Trần tự đặt mỗi tháng (0 = không đặt)</label><input id="cf-cap" data-cfg="cap" inputmode="numeric" value="${S.cfg.cap.toLocaleString('vi-VN')}"></div>
-      <div class="field"><label class="small" for="cf-start" style="font-weight:600">Bắt đầu theo dõi từ tháng</label><input id="cf-start" data-cfg="start" type="month" value="${st()}"></div>
-    </div>
-    <p class="note">Không dùng Ví Trả Sau thì để tất cả bằng 0, thẻ ví sẽ tự ẩn.</p>
+    ${tot('lev')?`<p class="note">Các khoản trả bằng Ví Trả Sau (${tr(tot('lev'))}) không trừ tiền thịt tháng này. Chúng vào hoá đơn ví và được trả tháng sau.</p>`:''}
   </div></section>`;
 }
 function planView(){
@@ -479,6 +481,7 @@ function planView(){
   ${personal}
   <div class="card">
     <div class="sec-title"><h2>Sao lưu & chuyển máy</h2></div>
+    <div class="field" style="max-width:240px;margin-bottom:10px"><label class="small" for="cf-start" style="font-weight:600">Bắt đầu theo dõi từ tháng</label><input id="cf-start" data-cfg="start" type="month" value="${st()}"></div>
     <p class="note" style="margin-top:0">Dữ liệu nằm trong máy này. Mỗi tuần sao lưu một lần. Đổi máy hay cài lại app thì khôi phục từ file hoặc đoạn đã copy. Bản sao lưu gồm cả thu chi cố định và cài đặt.</p>
     <div class="row" style="flex-wrap:wrap;justify-content:flex-start;gap:8px">
       ${window.claude?'':'<button class="btn sm" data-bk="file">Tải file sao lưu</button>'}
@@ -566,7 +569,7 @@ function openSheet(edit){
 }
 
 // ---------- sheet: khoản cố định ----------
-function openRecSheet(id){
+function openRecSheet(id,presetDay){
   const r=id==='new'?null:S.rec.find(x=>x.id===id);
   let kind=r?r.kind:'in',mode=r?(r.mode||'first'):'first';
   const jarOpts=JARS().map(j=>`<option value="${j.id}" ${r&&r.jar===j.id?'selected':''}>${esc(j.name)}</option>`).join('');
@@ -581,7 +584,7 @@ function openRecSheet(id){
     <div class="field" id="amtField"><label class="label" for="rAmt" id="rAmtLabel">Số tiền mỗi tháng</label><input class="amt-in" id="rAmt" inputmode="numeric" value="${r&&r.amt?r.amt.toLocaleString('vi-VN'):''}" placeholder="0"><span class="small muted" id="rAmtHint">Gõ 500 = 500.000đ</span></div>
     <div class="field" id="jarField"><label class="label" for="rJar">Bỏ vào hũ</label><select id="rJar">${jarOpts}</select></div>
     <div class="grid g2" style="gap:10px">
-      <div class="field"><label class="label" for="rDay">Ngày trong tháng</label><input id="rDay" type="number" min="1" max="31" inputmode="numeric" value="${r?r.day:1}"></div>
+      <div class="field"><label class="label" for="rDay">Ngày trong tháng</label><input id="rDay" type="number" min="1" max="31" inputmode="numeric" value="${r?r.day:(presetDay||1)}"></div>
       ${r?'':`<div class="field"><label class="label" for="rFrom">Bắt đầu từ tháng</label><input id="rFrom" type="month" value="${viewKey}"></div>`}
     </div>
     ${r?'<p class="note" style="margin:0">Sửa ở đây áp dụng cho mọi tháng chưa tick. Chỉ muốn đổi riêng một tháng thì bấm vào số tiền trong checklist tháng đó.</p>':''}
@@ -653,7 +656,7 @@ function restore(txt,btn){
 }
 $('#view').addEventListener('click',e=>{
   const g=e.target.closest('[data-goto]');if(g){tab=g.dataset.goto;render();return}
-  const rc=e.target.closest('[data-rec]');if(rc){openRecSheet(rc.dataset.rec);return}
+  const rc=e.target.closest('[data-rec]');if(rc){e.preventDefault();openRecSheet(rc.dataset.rec,rc.dataset.day?+rc.dataset.day:0);return}
   const op=e.target.closest('[data-open]');if(op){const t=month(viewKey).tx.find(x=>x.id===op.dataset.open);if(t)openSheet(t);return}
   const bk=e.target.closest('[data-bk]');
   if(bk){const t=bk.dataset.bk;
